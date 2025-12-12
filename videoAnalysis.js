@@ -51,11 +51,9 @@ async function extractFrames(videoPath, numFrames = 3) {
     const outputDir = path.join(path.dirname(videoPath), '.frames');
     await fs.mkdir(outputDir, { recursive: true });
 
-    const framePaths = [];
-
     return new Promise((resolve, reject) => {
         // Get video duration first
-        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+        ffmpeg.ffprobe(videoPath, async (err, metadata) => {
             if (err) {
                 reject(err);
                 return;
@@ -63,71 +61,51 @@ async function extractFrames(videoPath, numFrames = 3) {
 
             const duration = metadata.format.duration;
             const interval = duration / (numFrames + 1);
+            const framePaths = [];
 
-            let framesExtracted = 0;
-            const failedFrames = [];
+            // Extract frames SEQUENTIALLY to avoid race conditions
+            try {
+                for (let i = 1; i <= numFrames; i++) {
+                    const timestamp = interval * i;
+                    const outputPath = path.join(outputDir, `frame_${i}.jpg`);
 
-            // Helper function to wait for file to exist and be readable
-            const waitForFile = async (filePath, maxAttempts = 10) => {
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    try {
-                        await fs.access(filePath);
-                        // Small additional delay to ensure file is fully written
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        return true;
-                    } catch (e) {
-                        await new Promise(resolve => setTimeout(resolve, 200));
-                    }
-                }
-                return false;
-            };
+                    // Wait for each frame to complete before starting the next
+                    await new Promise((resolveFrame, rejectFrame) => {
+                        ffmpeg(videoPath)
+                            .screenshots({
+                                timestamps: [timestamp],
+                                filename: `frame_${i}.jpg`,
+                                folder: outputDir,
+                                size: '640x?'
+                            })
+                            .on('end', async () => {
+                                // Wait a bit to ensure file is written
+                                await new Promise(r => setTimeout(r, 200));
 
-            // Extract frames at intervals
-            for (let i = 1; i <= numFrames; i++) {
-                const timestamp = interval * i;
-                const outputPath = path.join(outputDir, `frame_${i}.jpg`);
-
-                ffmpeg(videoPath)
-                    .screenshots({
-                        timestamps: [timestamp],
-                        filename: `frame_${i}.jpg`,
-                        folder: outputDir,
-                        size: '640x?'  // Resize for faster processing
-                    })
-                    .on('end', async () => {
-                        // Wait for file to be fully written
-                        const fileExists = await waitForFile(outputPath);
-
-                        if (fileExists) {
-                            framePaths.push(outputPath);
-                        } else {
-                            console.error(`Frame ${i} was not written successfully`);
-                            failedFrames.push(i);
-                        }
-
-                        framesExtracted++;
-
-                        if (framesExtracted === numFrames) {
-                            if (framePaths.length > 0) {
-                                resolve(framePaths);
-                            } else {
-                                reject(new Error('Failed to extract any frames'));
-                            }
-                        }
-                    })
-                    .on('error', (err) => {
-                        console.error(`Error extracting frame ${i}:`, err);
-                        failedFrames.push(i);
-                        framesExtracted++;
-
-                        if (framesExtracted === numFrames) {
-                            if (framePaths.length > 0) {
-                                resolve(framePaths);
-                            } else {
-                                reject(new Error('Failed to extract any frames'));
-                            }
-                        }
+                                // Verify file exists
+                                try {
+                                    await fs.access(outputPath);
+                                    framePaths.push(outputPath);
+                                    resolveFrame();
+                                } catch (e) {
+                                    console.error(`Frame ${i} not found after extraction`);
+                                    resolveFrame(); // Continue even if this frame failed
+                                }
+                            })
+                            .on('error', (err) => {
+                                console.error(`Error extracting frame ${i}:`, err);
+                                resolveFrame(); // Continue even if this frame failed
+                            });
                     });
+                }
+
+                if (framePaths.length > 0) {
+                    resolve(framePaths);
+                } else {
+                    reject(new Error('Failed to extract any frames'));
+                }
+            } catch (error) {
+                reject(error);
             }
         });
     });
@@ -287,18 +265,17 @@ async function generateAITags(videoPath) {
         // Extract frames
         const framePaths = await extractFrames(videoPath, FRAMES_TO_ANALYZE);
 
-        const taggingPrompt = `Analyze this image in detail and provide comprehensive tags. Include:
+        const taggingPrompt = `Analyze this image and list COMPREHENSIVE tags for what is ACTUALLY VISIBLE. 
 
-PEOPLE: Describe any people (man, woman, multiple people, age range if apparent)
-CLOTHING: State of dress (clothed, nude, partial nudity, lingerie, swimwear, costume, casual, formal, etc.)
-ACTIVITIES: What actions are happening (standing, sitting, dancing, exercising, intimate activities, etc.)
-OBJECTS: Items visible (furniture, vehicles, pets, toys, electronics, food, drinks, etc.)
-SETTING: Location and scene (indoor, outdoor, bedroom, office, nature, city, beach, etc.)
-STYLE: Visual style (realistic, artistic, professional, amateur, high-quality, vintage, etc.)
-MOOD: Overall atmosphere (romantic, playful, serious, energetic, calm, passionate, etc.)
+Rules:
+- List subjects, objects, settings, styles, and moods.
+- ONLY tag "person", "man", "woman" etc if a human is clearly visible. 
+- ONLY tag clothing/nudity if a person is visible.
+- If no people are present, DO NOT include tags about people, clothing, or body parts.
+- For adult content, be specific (e.g., "nude", "lingerie", "sexual activity", "toy").
+- Include specific object names (e.g., "chair", "car", "apple").
 
-For adult content, be specific about what's happening and visible.
-List all relevant tags separated by commas. Be thorough and specific.`;
+Output purely a comma-separated list of relevant tags. Do not categorize or explain.`;
 
         const allTags = new Set();
 

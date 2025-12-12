@@ -30,6 +30,11 @@ const modalBackdrop = document.getElementById('modalBackdrop');
 const closeModal = document.getElementById('closeModal');
 const statsBtn = document.getElementById('statsBtn');
 
+// Processing modal elements
+const processingModal = document.getElementById('processingModal');
+const processingStatus = document.getElementById('processingStatus');
+const processingProgress = document.getElementById('processingProgress');
+
 // Auth elements
 const adminBtn = document.getElementById('adminBtn');
 const loginModal = document.getElementById('loginModal');
@@ -159,12 +164,21 @@ async function handleUpload(e) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 progressBar.style.width = `${percent}%`;
                 progressPercent.textContent = `${percent}%`;
+
+                // Show processing modal when upload reaches 100%
+                if (percent === 100) {
+                    uploadProgress.classList.add('hidden');
+                    showProcessingModal();
+                }
             }
         });
 
         xhr.addEventListener('load', () => {
             if (xhr.status === 200) {
                 const response = JSON.parse(xhr.responseText);
+
+                // Hide processing modal and show success
+                hideProcessingModal();
                 showStatus('Video uploaded successfully! 🎉', 'success');
 
                 // Reset form
@@ -173,22 +187,21 @@ async function handleUpload(e) {
                 titleInput.value = '';
 
                 // Reload videos
-                setTimeout(() => {
-                    loadVideos();
-                    loadPopularTags();
-                }, 1000);
+                loadVideos();
+                loadPopularTags();
             } else {
+                hideProcessingModal();
                 const error = JSON.parse(xhr.responseText);
                 showStatus(error.error || 'Upload failed', 'error');
             }
 
             uploadBtn.disabled = false;
-            uploadProgress.classList.add('hidden');
             progressBar.style.width = '0%';
             progressPercent.textContent = '0%';
         });
 
         xhr.addEventListener('error', () => {
+            hideProcessingModal();
             showStatus('Network error. Please try again.', 'error');
             uploadBtn.disabled = false;
             uploadProgress.classList.add('hidden');
@@ -199,6 +212,7 @@ async function handleUpload(e) {
 
     } catch (error) {
         console.error('Upload error:', error);
+        hideProcessingModal();
         showStatus('Upload failed. Please try again.', 'error');
         uploadBtn.disabled = false;
         uploadProgress.classList.add('hidden');
@@ -802,4 +816,50 @@ async function deleteVideo(videoId) {
         console.error('Delete error:', error);
         alert('Failed to delete video. Please try again.');
     }
+}
+
+// Processing Modal Functions
+function showProcessingModal() {
+    processingModal.classList.remove('hidden');
+    processingProgress.style.width = '0%';
+    processingStatus.textContent = 'Analyzing content and generating tags...';
+
+    // Animate progress bar
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90; // Cap at 90% until actually done
+        processingProgress.style.width = `${progress}%`;
+
+        // Update status text
+        if (progress < 30) {
+            processingStatus.textContent = 'Extracting video frames...';
+        } else if (progress < 50) {
+            processingStatus.textContent = 'Generating tags and ratings...';
+        } else if (progress < 80) {
+            processingStatus.textContent = 'Checking content moderation...';
+        } else {
+            processingStatus.textContent = 'Analyzing content with AI...';
+        }
+    }, 300);
+
+    // Store interval ID to clear it later
+    processingModal.dataset.intervalId = interval;
+}
+
+function hideProcessingModal() {
+    // Complete the progress bar
+    processingProgress.style.width = '100%';
+    processingStatus.textContent = 'Complete!';
+
+    // Clear animation interval
+    const intervalId = processingModal.dataset.intervalId;
+    if (intervalId) {
+        clearInterval(parseInt(intervalId));
+    }
+
+    // Hide modal after brief delay
+    setTimeout(() => {
+        processingModal.classList.add('hidden');
+    }, 500);
 }
