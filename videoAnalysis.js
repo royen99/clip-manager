@@ -252,7 +252,18 @@ async function generateAITags(videoPath) {
         // Extract frames
         const framePaths = await extractFrames(videoPath, FRAMES_TO_ANALYZE);
 
-        const taggingPrompt = `Describe this image in detail. List the main subjects, objects, activities, scene type, style, and mood. Be specific and concise. Format: subject1, subject2, action, scene, style, mood`;
+        const taggingPrompt = `Analyze this image in detail and provide comprehensive tags. Include:
+
+PEOPLE: Describe any people (man, woman, multiple people, age range if apparent)
+CLOTHING: State of dress (clothed, nude, partial nudity, lingerie, swimwear, costume, casual, formal, etc.)
+ACTIVITIES: What actions are happening (standing, sitting, dancing, exercising, intimate activities, etc.)
+OBJECTS: Items visible (furniture, vehicles, pets, toys, electronics, food, drinks, etc.)
+SETTING: Location and scene (indoor, outdoor, bedroom, office, nature, city, beach, etc.)
+STYLE: Visual style (realistic, artistic, professional, amateur, high-quality, vintage, etc.)
+MOOD: Overall atmosphere (romantic, playful, serious, energetic, calm, passionate, etc.)
+
+For adult content, be specific about what's happening and visible.
+List all relevant tags separated by commas. Be thorough and specific.`;
 
         const allTags = new Set();
 
