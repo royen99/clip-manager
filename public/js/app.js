@@ -265,16 +265,18 @@ function createVideoCard(video, index) {
           <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
         </svg>
       </div>
-      ${isAuthenticated ? `
-      <button class="absolute top-1.5 right-1.5 p-1.5 bg-red-600/90 hover:bg-red-700 rounded-md shadow-md transition-colors z-10" data-video-id="${video.id}" onclick="event.stopPropagation(); deleteVideo(${video.id})">
-        <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-        </svg>
-      </button>
-      ` : ''}
     </div>
     <div class="p-4">
-      <h3 class="font-semibold text-white mb-2 truncate">${escapeHtml(video.title)}</h3>
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold text-white truncate flex-1">${escapeHtml(video.title)}</h3>
+        ${isAuthenticated ? `
+        <button class="ml-2 p-1 text-red-400 hover:text-red-300 transition-colors" data-video-id="${video.id}" onclick="event.stopPropagation(); deleteVideo(${video.id})" title="Delete video">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+        ` : ''}
+      </div>
       <div class="flex items-center justify-between text-sm text-dark-400 mb-3">
         <span>${uploadDate}</span>
         <span>${video.duration ? formatDuration(video.duration) : 'N/A'}</span>
