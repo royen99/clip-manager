@@ -303,29 +303,37 @@ function showVideoModal(video) {
     // Render ComfyUI metadata if available
     const comfyMetadata = video.metadata?.comfyui;
     const modalComfyMetadata = document.getElementById('modalComfyMetadata');
-    if (comfyMetadata && Object.values(comfyMetadata).some(v => v !== null && v !== '' && (Array.isArray(v) ? v.length > 0 : true))) {
+
+    // Check if we need to parse the prompt (for old videos with raw JSON)
+    let parsedComfy = comfyMetadata;
+    if (comfyMetadata?.prompt && typeof comfyMetadata.prompt === 'string') {
+        // Try to detect if it's raw JSON workflow
+        if (comfyMetadata.prompt.trim().startsWith('{') && comfyMetadata.prompt.includes('class_type')) {
+            // It's a raw workflow JSON - parse it client-side
+            parsedComfy = parseComfyUIWorkflowClient(comfyMetadata.prompt);
+        }
+    }
+
+    if (parsedComfy && Object.values(parsedComfy).some(v => v !== null && v !== '' && (Array.isArray(v) ? v.length > 0 : true))) {
         const comfyContent = document.getElementById('comfyMetadataContent');
         let html = '';
 
         // Prompt (formatted nicely)
-        if (comfyMetadata.prompt) {
-            const promptText = typeof comfyMetadata.prompt === 'string'
-                ? comfyMetadata.prompt
-                : JSON.stringify(comfyMetadata.prompt);
+        if (parsedComfy.prompt && typeof parsedComfy.prompt === 'string') {
             html += `
                 <div class="mb-3">
                     <div class="text-sm font-semibold text-primary-400 mb-1">Prompt</div>
-                    <div class="text-sm text-white bg-dark-900/70 rounded p-2 whitespace-pre-wrap">${escapeHtml(promptText)}</div>
+                    <div class="text-sm text-white bg-dark-900/70 rounded p-2 whitespace-pre-wrap max-h-40 overflow-y-auto">${escapeHtml(parsedComfy.prompt)}</div>
                 </div>
             `;
         }
 
-        // Negative Prompt
-        if (comfyMetadata.negativePrompt && typeof comfyMetadata.negativePrompt === 'string') {
+        // Negative Prompt  
+        if (parsedComfy.negativePrompt && typeof parsedComfy.negativePrompt === 'string') {
             html += `
                 <div class="mb-3">
                     <div class="text-sm font-semibold text-red-400 mb-1">Negative Prompt</div>
-                    <div class="text-sm text-dark-300 bg-dark-900/70 rounded p-2 text-xs">${escapeHtml(comfyMetadata.negativePrompt.substring(0, 200))}...</div>
+                    <div class="text-sm text-dark-300 bg-dark-900/70 rounded p-2 text-xs max-h-24 overflow-y-auto">${escapeHtml(parsedComfy.negativePrompt.substring(0, 300))}${parsedComfy.negativePrompt.length > 300 ? '...' : ''}</div>
                 </div>
             `;
         }
@@ -333,49 +341,49 @@ function showVideoModal(video) {
         // Generation settings grid
         html += '<div class="grid grid-cols-2 gap-2 text-sm mb-3">';
 
-        if (comfyMetadata.model) {
-            const modelName = comfyMetadata.model.split('/').pop().replace('.safetensors', '');
+        if (parsedComfy.model) {
+            const modelName = parsedComfy.model.split('/').pop().replace('.safetensors', '');
             html += `<div><span class="text-dark-400">Model:</span> <span class="text-white text-xs">${escapeHtml(modelName)}</span></div>`;
         }
 
-        if (comfyMetadata.generationType) {
-            html += `<div><span class="text-dark-400">Type:</span> <span class="text-primary-400">${escapeHtml(comfyMetadata.generationType)}</span></div>`;
+        if (parsedComfy.generationType) {
+            html += `<div><span class="text-dark-400">Type:</span> <span class="text-primary-400">${escapeHtml(parsedComfy.generationType)}</span></div>`;
         }
 
-        if (comfyMetadata.steps) {
-            html += `<div><span class="text-dark-400">Steps:</span> <span class="text-white">${comfyMetadata.steps}</span></div>`;
+        if (parsedComfy.steps) {
+            html += `<div><span class="text-dark-400">Steps:</span> <span class="text-white">${parsedComfy.steps}</span></div>`;
         }
 
-        if (comfyMetadata.cfg) {
-            html += `<div><span class="text-dark-400">CFG:</span> <span class="text-white">${comfyMetadata.cfg}</span></div>`;
+        if (parsedComfy.cfg) {
+            html += `<div><span class="text-dark-400">CFG:</span> <span class="text-white">${parsedComfy.cfg}</span></div>`;
         }
 
-        if (comfyMetadata.seed !== null && comfyMetadata.seed !== undefined) {
-            html += `<div><span class="text-dark-400">Seed:</span> <span class="text-white">${comfyMetadata.seed}</span></div>`;
+        if (parsedComfy.seed !== null && parsedComfy.seed !== undefined) {
+            html += `<div><span class="text-dark-400">Seed:</span> <span class="text-white">${parsedComfy.seed}</span></div>`;
         }
 
-        if (comfyMetadata.scheduler) {
-            html += `<div><span class="text-dark-400">Scheduler:</span> <span class="text-white">${escapeHtml(comfyMetadata.scheduler)}</span></div>`;
+        if (parsedComfy.scheduler) {
+            html += `<div><span class="text-dark-400">Scheduler:</span> <span class="text-white">${escapeHtml(parsedComfy.scheduler)}</span></div>`;
         }
 
-        if (comfyMetadata.resolution) {
-            html += `<div><span class="text-dark-400">Resolution:</span> <span class="text-white">${comfyMetadata.resolution}</span></div>`;
+        if (parsedComfy.resolution) {
+            html += `<div><span class="text-dark-400">Resolution:</span> <span class="text-white">${parsedComfy.resolution}</span></div>`;
         }
 
-        if (comfyMetadata.frameRate) {
-            html += `<div><span class="text-dark-400">Frame Rate:</span> <span class="text-white">${comfyMetadata.frameRate} fps</span></div>`;
+        if (parsedComfy.frameRate) {
+            html += `<div><span class="text-dark-400">Frame Rate:</span> <span class="text-white">${parsedComfy.frameRate} fps</span></div>`;
         }
 
-        if (comfyMetadata.numFrames) {
-            html += `<div><span class="text-dark-400">Frames:</span> <span class="text-white">${comfyMetadata.numFrames}</span></div>`;
+        if (parsedComfy.numFrames) {
+            html += `<div><span class="text-dark-400">Frames:</span> <span class="text-white">${parsedComfy.numFrames}</span></div>`;
         }
 
         html += '</div>';
 
         // LoRAs
-        if (comfyMetadata.loras && comfyMetadata.loras.length > 0) {
+        if (parsedComfy.loras && parsedComfy.loras.length > 0) {
             html += '<div class="mb-2"><div class="text-sm font-semibold text-primary-400 mb-1">LoRAs</div>';
-            comfyMetadata.loras.forEach(lora => {
+            parsedComfy.loras.forEach(lora => {
                 const loraName = lora.name.replace('.safetensors', '');
                 html += `<div class="text-xs text-white bg-dark-900/50 rounded px-2 py-1 mb-1">
                     ${escapeHtml(loraName)} <span class="text-dark-400">(${lora.strength})</span>
@@ -386,11 +394,11 @@ function showVideoModal(video) {
 
         // VAE and CLIP models
         const models = [];
-        if (comfyMetadata.vaeModel) {
-            models.push(`VAE: ${comfyMetadata.vaeModel.replace('.safetensors', '')}`);
+        if (parsedComfy.vaeModel) {
+            models.push(`VAE: ${parsedComfy.vaeModel.replace('.safetensors', '')}`);
         }
-        if (comfyMetadata.clipModel) {
-            models.push(`CLIP: ${comfyMetadata.clipModel.replace('.safetensors', '')}`);
+        if (parsedComfy.clipModel) {
+            models.push(`CLIP: ${parsedComfy.clipModel.replace('.safetensors', '')}`);
         }
         if (models.length > 0) {
             html += `<div class="text-xs text-dark-400 mt-2">${escapeHtml(models.join(' • '))}</div>`;
@@ -405,6 +413,124 @@ function showVideoModal(video) {
     videoModal.classList.remove('hidden');
     videoModal.classList.add('show');
     document.body.style.overflow = 'hidden';
+}
+
+// Client-side ComfyUI workflow parser (for old videos with raw JSON)
+function parseComfyUIWorkflowClient(workflowData) {
+    const parsed = {
+        prompt: null,
+        negativePrompt: null,
+        model: null,
+        loras: [],
+        steps: null,
+        cfg: null,
+        seed: null,
+        scheduler: null,
+        resolution: null,
+        frameRate: null,
+        numFrames: null
+    };
+
+    // If it's a string, try to parse it
+    if (typeof workflowData === 'string') {
+        try {
+            workflowData = JSON.parse(workflowData);
+        } catch (e) {
+            // Not JSON, treat as plain prompt
+            parsed.prompt = workflowData;
+            return parsed;
+        }
+    }
+
+    if (!workflowData || typeof workflowData !== 'object') {
+        return parsed;
+    }
+
+    // Iterate through all nodes to extract information
+    Object.values(workflowData).forEach(node => {
+        if (!node || !node.inputs) return;
+
+        const inputs = node.inputs;
+        const classType = node.class_type;
+
+        // Extract positive prompt from ImpactWildcardProcessor
+        if (classType === 'ImpactWildcardProcessor' && inputs.populated_text) {
+            parsed.prompt = inputs.populated_text;
+        }
+
+        // Extract prompt from CLIPTextEncode (fallback)
+        if (!parsed.prompt && classType === 'CLIPTextEncode' && inputs.text) {
+            const text = inputs.text;
+            if (typeof text === 'string' && text.length > 10 && !text.includes('低质量') && !text.includes('worst quality')) {
+                parsed.prompt = text;
+            } else if (typeof text === 'string' && (text.includes('低质量') || text.includes('worst quality'))) {
+                parsed.negativePrompt = text;
+            }
+        }
+
+        // Extract model information
+        if (classType === 'WanVideoModelLoader' && inputs.model) {
+            if (!parsed.model || inputs.model.includes('HIGH')) {
+                parsed.model = inputs.model;
+            }
+        }
+
+        // Extract LoRA information
+        if (classType === 'WanVideoLoraSelect' && inputs.lora && inputs.lora !== 'none') {
+            parsed.loras.push({
+                name: inputs.lora,
+                strength: inputs.strength || 1.0
+            });
+        }
+
+        // Extract sampler settings
+        if (classType === 'WanVideoSampler') {
+            if (inputs.steps) parsed.steps = inputs.steps;
+            if (inputs.cfg) parsed.cfg = inputs.cfg;
+            if (inputs.seed !== undefined) parsed.seed = inputs.seed;
+            if (inputs.scheduler) parsed.scheduler = inputs.scheduler;
+        }
+
+        // Extract video settings
+        if (classType === 'VHS_VideoCombine' && inputs.frame_rate) {
+            parsed.frameRate = inputs.frame_rate;
+        }
+
+        // Extract frame count and resolution
+        if (classType === 'WanVideoEmptyEmbeds') {
+            if (inputs.num_frames) parsed.numFrames = inputs.num_frames;
+            if (inputs.width && inputs.height) {
+                parsed.resolution = `${inputs.width}x${inputs.height}`;
+            }
+        }
+
+        // Extract aspect ratio
+        if (classType === 'Width and height from aspect ratio 🦴' && inputs.aspect_ratio) {
+            parsed.aspectRatio = inputs.aspect_ratio;
+        }
+
+        // Extract INTConstant for steps
+        if (classType === 'INTConstant' && inputs.value && !parsed.steps) {
+            if (inputs.value >= 1 && inputs.value <= 50) {
+                parsed.steps = inputs.value;
+            }
+        }
+    });
+
+    // If steps is still an array reference, try to resolve it
+    if (!parsed.steps) {
+        Object.values(workflowData).forEach(node => {
+            if (node?.inputs?.steps && typeof node.inputs.steps === 'object' && Array.isArray(node.inputs.steps)) {
+                const refNodeId = node.inputs.steps[0];
+                const refNode = workflowData[refNodeId];
+                if (refNode?.inputs?.value) {
+                    parsed.steps = refNode.inputs.value;
+                }
+            }
+        });
+    }
+
+    return parsed;
 }
 
 function hideModal() {
