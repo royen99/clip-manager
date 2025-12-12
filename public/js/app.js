@@ -297,18 +297,106 @@ function showVideoModal(video) {
     <div><span class="text-dark-400">Size:</span> <span class="text-white">${formatFileSize(video.file_size)}</span></div>
     <div><span class="text-dark-400">Uploaded:</span> <span class="text-white">${new Date(video.upload_date).toLocaleString()}</span></div>
     <div><span class="text-dark-400">Views:</span> <span class="text-white">${video.views || 0}</span></div>
+        <div><span class="text-dark-400">Views:</span> <span class="text-white">${video.views || 0}</span></div>
   `;
 
     // Render ComfyUI metadata if available
     const comfyMetadata = video.metadata?.comfyui;
     const modalComfyMetadata = document.getElementById('modalComfyMetadata');
-    if (comfyMetadata && Object.values(comfyMetadata).some(v => v !== null)) {
+    if (comfyMetadata && Object.values(comfyMetadata).some(v => v !== null && v !== '' && (Array.isArray(v) ? v.length > 0 : true))) {
         const comfyContent = document.getElementById('comfyMetadataContent');
-        comfyContent.innerHTML = Object.entries(comfyMetadata)
-            .filter(([key, value]) => value !== null && value !== undefined && value !== '')
-            .map(([key, value]) => `
-        <div><span class="text-dark-400">${key}:</span> <span class="text-white">${escapeHtml(String(value))}</span></div>
-      `).join('');
+        let html = '';
+
+        // Prompt (formatted nicely)
+        if (comfyMetadata.prompt) {
+            const promptText = typeof comfyMetadata.prompt === 'string'
+                ? comfyMetadata.prompt
+                : JSON.stringify(comfyMetadata.prompt);
+            html += `
+                <div class="mb-3">
+                    <div class="text-sm font-semibold text-primary-400 mb-1">Prompt</div>
+                    <div class="text-sm text-white bg-dark-900/70 rounded p-2 whitespace-pre-wrap">${escapeHtml(promptText)}</div>
+                </div>
+            `;
+        }
+
+        // Negative Prompt
+        if (comfyMetadata.negativePrompt && typeof comfyMetadata.negativePrompt === 'string') {
+            html += `
+                <div class="mb-3">
+                    <div class="text-sm font-semibold text-red-400 mb-1">Negative Prompt</div>
+                    <div class="text-sm text-dark-300 bg-dark-900/70 rounded p-2 text-xs">${escapeHtml(comfyMetadata.negativePrompt.substring(0, 200))}...</div>
+                </div>
+            `;
+        }
+
+        // Generation settings grid
+        html += '<div class="grid grid-cols-2 gap-2 text-sm mb-3">';
+
+        if (comfyMetadata.model) {
+            const modelName = comfyMetadata.model.split('/').pop().replace('.safetensors', '');
+            html += `<div><span class="text-dark-400">Model:</span> <span class="text-white text-xs">${escapeHtml(modelName)}</span></div>`;
+        }
+
+        if (comfyMetadata.generationType) {
+            html += `<div><span class="text-dark-400">Type:</span> <span class="text-primary-400">${escapeHtml(comfyMetadata.generationType)}</span></div>`;
+        }
+
+        if (comfyMetadata.steps) {
+            html += `<div><span class="text-dark-400">Steps:</span> <span class="text-white">${comfyMetadata.steps}</span></div>`;
+        }
+
+        if (comfyMetadata.cfg) {
+            html += `<div><span class="text-dark-400">CFG:</span> <span class="text-white">${comfyMetadata.cfg}</span></div>`;
+        }
+
+        if (comfyMetadata.seed !== null && comfyMetadata.seed !== undefined) {
+            html += `<div><span class="text-dark-400">Seed:</span> <span class="text-white">${comfyMetadata.seed}</span></div>`;
+        }
+
+        if (comfyMetadata.scheduler) {
+            html += `<div><span class="text-dark-400">Scheduler:</span> <span class="text-white">${escapeHtml(comfyMetadata.scheduler)}</span></div>`;
+        }
+
+        if (comfyMetadata.resolution) {
+            html += `<div><span class="text-dark-400">Resolution:</span> <span class="text-white">${comfyMetadata.resolution}</span></div>`;
+        }
+
+        if (comfyMetadata.frameRate) {
+            html += `<div><span class="text-dark-400">Frame Rate:</span> <span class="text-white">${comfyMetadata.frameRate} fps</span></div>`;
+        }
+
+        if (comfyMetadata.numFrames) {
+            html += `<div><span class="text-dark-400">Frames:</span> <span class="text-white">${comfyMetadata.numFrames}</span></div>`;
+        }
+
+        html += '</div>';
+
+        // LoRAs
+        if (comfyMetadata.loras && comfyMetadata.loras.length > 0) {
+            html += '<div class="mb-2"><div class="text-sm font-semibold text-primary-400 mb-1">LoRAs</div>';
+            comfyMetadata.loras.forEach(lora => {
+                const loraName = lora.name.replace('.safetensors', '');
+                html += `<div class="text-xs text-white bg-dark-900/50 rounded px-2 py-1 mb-1">
+                    ${escapeHtml(loraName)} <span class="text-dark-400">(${lora.strength})</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        // VAE and CLIP models
+        const models = [];
+        if (comfyMetadata.vaeModel) {
+            models.push(`VAE: ${comfyMetadata.vaeModel.replace('.safetensors', '')}`);
+        }
+        if (comfyMetadata.clipModel) {
+            models.push(`CLIP: ${comfyMetadata.clipModel.replace('.safetensors', '')}`);
+        }
+        if (models.length > 0) {
+            html += `<div class="text-xs text-dark-400 mt-2">${escapeHtml(models.join(' • '))}</div>`;
+        }
+
+        comfyContent.innerHTML = html;
         modalComfyMetadata.classList.remove('hidden');
     } else {
         modalComfyMetadata.classList.add('hidden');

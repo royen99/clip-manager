@@ -36,46 +36,194 @@ async function extractVideoMetadata(filePath) {
 }
 
 /**
+ * Parse ComfyUI workflow data into user-friendly format
+ */
+function parseComfyUIWorkflow(workflowData) {
+    const parsed = {
+        prompt: null,
+        negativePrompt: null,
+        model: null,
+        loras: [],
+        steps: null,
+        cfg: null,
+        seed: null,
+        sampler: null,
+        scheduler: null,
+        resolution: null,
+        frameRate: null,
+        numFrames: null,
+        vaeModel: null,
+        clipModel: null
+    };
+
+    if (!workflowData || typeof workflowData !== 'object') {
+        return parsed;
+    }
+
+    // Iterate through all nodes to extract information
+    Object.values(workflowData).forEach(node => {
+        if (!node || !node.inputs) return;
+
+        const inputs = node.inputs;
+        const classType = node.class_type;
+
+        // Extract positive prompts (CLIPTextEncode, ImpactWildcardProcessor)
+        if (classType === 'CLIPTextEncode' && inputs.text && !parsed.prompt) {
+            // Check if it's not the negative prompt (usually longer or first one found)
+            const text = inputs.text;
+            if (typeof text === 'string' && text.length > 10 && !text.includes('低质量') && !text.includes('worst quality')) {
+                parsed.prompt = text;
+            } else if (typeof text === 'string' && text.includes('低质量')) {
+                parsed.negativePrompt = text;
+            }
+        }
+
+        // Extract wildcard/prompt processor
+        if (classType === 'ImpactWildcardProcessor' && inputs.populated_text) {
+            parsed.prompt = inputs.populated_text;
+        }
+
+        // Extract model information
+        if (classType === 'WanVideoModelLoader' && inputs.model) {
+            if (!parsed.model || inputs.model.includes('HIGH')) {
+                parsed.model = inputs.model;
+            }
+        }
+
+        // Extract LoRA information
+        if ((classType === 'WanVideoLoraSelect' || classType === 'WanVideoLoraSelectMulti') && inputs.lora) {
+            if (inputs.lora !== 'none') {
+                parsed.loras.push({
+                    name: inputs.lora,
+                    strength: inputs.strength || inputs.strength_0 || 1.0
+                });
+            }
+        }
+
+        // Extract sampler settings
+        if (classType === 'WanVideoSampler') {
+            if (inputs.steps) parsed.steps = inputs.steps;
+            if (inputs.cfg) parsed.cfg = inputs.cfg;
+            if (inputs.seed !== undefined) parsed.seed = inputs.seed;
+            if (inputs.scheduler) parsed.scheduler = inputs.scheduler;
+        }
+
+        // Extract VAE model
+        if (classType === 'WanVideoVAELoader' && inputs.model_name) {
+            parsed.vaeModel = inputs.model_name;
+        }
+
+        // Extract CLIP model
+        if (classType === 'CLIPLoader' && inputs.clip_name) {
+            parsed.clipModel = inputs.clip_name;
+        }
+
+        // Extract video settings
+        if (classType === 'VHS_VideoCombine') {
+            if (inputs.frame_rate) parsed.frameRate = inputs.frame_rate;
+        }
+
+        // Extract frame count
+        if (classType === 'WanVideoEmptyEmbeds') {
+            if (inputs.num_frames) parsed.numFrames = inputs.num_frames;
+            if (inputs.width && inputs.height) {
+                parsed.resolution = `${inputs.width}x${inputs.height}`;
+            }
+        }
+
+        // Extract resolution from aspect ratio calculator
+        if (classType === 'Width and height from aspect ratio 🦴') {
+            parsed.aspectRatio = inputs.aspect_ratio;
+        }
+    });
+
+    return parsed;
+}
+
+/**
  * Extract ComfyUI-specific metadata from video file
  * ComfyUI often embeds metadata in the video file comments or as custom metadata
  */
 async function extractComfyUIMetadata(filePath) {
     try {
         const metadata = await extractVideoMetadata(filePath);
-        const comfyData = {
-            model: null,
+        let comfyData = {
             prompt: null,
             negativePrompt: null,
-            seed: null,
+            model: null,
+            loras: [],
             steps: null,
             cfg: null,
+            seed: null,
             sampler: null,
-            generationType: null // 'text-to-video' or 'image-to-video'
+            scheduler: null,
+            resolution: null,
+            frameRate: null,
+            numFrames: null,
+            vaeModel: null,
+            clipModel: null,
+            workflow: null
         };
 
         // Check for metadata in format tags
         const formatTags = metadata.rawMetadata?.format?.tags || {};
 
-        // Try to parse common ComfyUI metadata fields
-        if (formatTags.comment) {
+        // Parse prompt field if it exists (contains workflow JSON)
+        if (formatTags.prompt) {
             try {
-                const parsedComment = JSON.parse(formatTags.comment);
-                Object.assign(comfyData, parsedComment);
+                const promptData = typeof formatTags.prompt === 'string'
+                    ? JSON.parse(formatTags.prompt)
+                    : formatTags.prompt;
+
+                const parsedWorkflow = parseComfyUIWorkflow(promptData);
+                Object.assign(comfyData, parsedWorkflow);
             } catch (e) {
-                // If not JSON, try to parse as key-value pairs
-                const commentLines = formatTags.comment.split('\n');
-                commentLines.forEach(line => {
-                    const [key, value] = line.split(':').map(s => s.trim());
-                    if (key && value) {
-                        comfyData[key.toLowerCase()] = value;
-                    }
-                });
+                console.error('Error parsing ComfyUI prompt data:', e.message);
+                // Store as raw if can't parse
+                comfyData.prompt = formatTags.prompt;
             }
         }
 
-        // Extract from title/description if available
-        if (formatTags.title) comfyData.title = formatTags.title;
-        if (formatTags.description) comfyData.description = formatTags.description;
+        // Parse workflow field if it exists
+        if (formatTags.workflow) {
+            try {
+                const workflowData = typeof formatTags.workflow === 'string'
+                    ? JSON.parse(formatTags.workflow)
+                    : formatTags.workflow;
+
+                // Store workflow type/version if available
+                comfyData.workflowType = workflowData.class_type || 'comfyui';
+            } catch (e) {
+                console.error('Error parsing workflow:', e.message);
+            }
+        }
+
+        // Try to parse comment field as fallback
+        if (formatTags.comment && !comfyData.prompt) {
+            try {
+                const parsedComment = JSON.parse(formatTags.comment);
+                if (parsedComment.prompt) comfyData.prompt = parsedComment.prompt;
+                if (parsedComment.model) comfyData.model = parsedComment.model;
+                if (parsedComment.seed) comfyData.seed = parsedComment.seed;
+            } catch (e) {
+                // Not JSON, ignore
+            }
+        }
+
+        // Clean up the prompt text
+        if (comfyData.prompt && typeof comfyData.prompt === 'string') {
+            // Remove excessive newlines and trim
+            comfyData.prompt = comfyData.prompt.replace(/\n\n+/g, '\n').trim();
+        }
+
+        // Determine generation type
+        if (comfyData.model) {
+            if (comfyData.model.includes('T2V') || comfyData.model.includes('text')) {
+                comfyData.generationType = 'text-to-video';
+            } else if (comfyData.model.includes('I2V') || comfyData.model.includes('image')) {
+                comfyData.generationType = 'image-to-video';
+            }
+        }
 
         return {
             basic: metadata,
