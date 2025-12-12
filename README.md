@@ -331,19 +331,6 @@ Uses `nodemon` for auto-restart on file changes.
 **tags table:**
 - id, video_id, tag_name, confidence, source
 
-## Deployment Considerations
-
-For production deployment:
-
-1. Use a process manager (PM2, systemd)
-2. Set up reverse proxy (nginx, Apache)
-3. Enable HTTPS
-4. Consider migrating to PostgreSQL/MySQL
-5. Use cloud storage (AWS S3, Google Cloud Storage)
-6. Set up proper logging
-7. Configure CORS for your domain
-8. Set strong file size limits and validation
-
 ## Troubleshooting
 
 **FFmpeg errors:**
