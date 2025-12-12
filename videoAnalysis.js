@@ -211,10 +211,10 @@ Classifications:
 
                 // Check for illegal content keywords
                 const lowerResult = result.toLowerCase();
-                const illegalKeywords = ['child', 'minor', 'underage', 'kid', 'young child', 'prepubescent'];
+                const illegalKeywords = ['child', 'minor', 'childhood', 'children', 'underage', 'kid', 'young child', 'prepubescent'];
                 const hasIllegalContent = illegalKeywords.some(keyword => {
                     // Check if keyword appears in context of nudity or sexual content
-                    const keywordRegex = new RegExp(`(${keyword}).*?(nude|naked|sexual|explicit)|(nude|naked|sexual|explicit).*?(${keyword})`, 'i');
+                    const keywordRegex = new RegExp(`(${keyword}).*?(nude|vagina|penis|naked|sex|sexual|explicit)|(nude|vagina|penis|naked|sex|sexual|explicit).*?(${keyword})`, 'i');
                     return keywordRegex.test(result);
                 });
 
