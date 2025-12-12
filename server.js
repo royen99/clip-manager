@@ -105,6 +105,15 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
         // Extract metadata
         const metadata = await extractComfyUIMetadata(videoPath);
 
+        // Check for ComfyUI metadata
+        if (!metadata.comfyui || (!metadata.comfyui.workflow && !metadata.comfyui.prompt)) {
+            await fs.unlink(videoPath);
+            return res.status(400).json({
+                error: 'The video does not appear to contain an embedded ComfyUI workflow or prompt',
+                reason: 'No ComfyUI metadata found in the video'
+            });
+        }
+
         // Generate basic tags from filename and metadata
         const basicTags = generateBasicTags(req.file.originalname, metadata);
 

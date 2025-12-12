@@ -7,7 +7,7 @@
   <meta name="description"
     content="Upload, browse, and search AI-generated video clips from ComfyUI. Automatic tagging and content analysis.">
   <meta name="keywords" content="ComfyUI, AI videos, text-to-video, image-to-video, video gallery">
-  <title>Clip Manager - AI Video Gallery</title>
+  <title>ComfyUI Clip Manager - AI Video Gallery</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -83,12 +83,13 @@
             </svg>
           </div>
           <h1 class="text-2xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
-            Clip Manager
+            ComfyUI Clip Manager
           </h1>
         </div>
         <nav class="hidden md:flex items-center space-x-6">
           <a href="#gallery" class="text-dark-300 hover:text-white transition-colors">Gallery</a>
           <a href="#upload" class="text-dark-300 hover:text-white transition-colors">Upload</a>
+          <button id="infoBtn" class="text-dark-300 hover:text-white transition-colors">Info</button>
           <button id="statsBtn" class="text-dark-300 hover:text-white transition-colors">Stats</button>
           <button id="adminBtn"
             class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
@@ -319,6 +320,93 @@
     </div>
   </div>
 
+  <!-- Info/Help Modal -->
+  <div id="infoModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4 py-6">
+      <div class="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity" id="infoBackdrop"></div>
+
+      <div
+        class="relative bg-dark-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all max-w-2xl w-full mx-auto">
+        <div class="bg-dark-800 px-6 pt-5 pb-4">
+          <div class="flex items-start justify-between mb-4">
+            <h3 class="text-2xl font-bold text-white">About ComfyUI Clip Manager</h3>
+            <button id="closeInfoModal" class="text-dark-400 hover:text-white transition-colors">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="space-y-6 text-dark-200">
+            <!-- Introduction -->
+            <div>
+              <p class="text-lg">
+                ComfyUI Clip Manager is an AI-powered localized video management system designed specifically for
+                <span class="text-primary-400 font-semibold">ComfyUI</span> generated content.
+              </p>
+            </div>
+
+            <!-- Usage -->
+            <div class="bg-dark-900/50 rounded-xl p-4 border border-dark-700">
+              <h4 class="text-lg font-semibold text-white mb-2 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                How It Works
+              </h4>
+              <ul class="list-disc list-inside space-y-1 ml-1">
+                <li>Upload your AI-generated videos</li>
+                <li>System automatically extracts prompts & workflow data</li>
+                <li>Content is analyzed and auto-tagged by vision AI</li>
+                <li>Search and filter your collection by prompt, tags, or model</li>
+              </ul>
+            </div>
+
+            <!-- Content Rules -->
+            <div class="grid md:grid-cols-2 gap-4">
+              <!-- Allowed Content -->
+              <div class="bg-green-500/10 rounded-xl p-4 border border-green-500/20">
+                <h4 class="text-green-400 font-semibold mb-2 flex items-center">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  Allowed Content
+                </h4>
+                <p class="text-sm">
+                  Only videos created with <strong>ComfyUI</strong> containing embedded metadata (workflow/prompts) are
+                  accepted.
+                </p>
+              </div>
+
+              <!-- Forbidden Content -->
+              <div class="bg-red-500/10 rounded-xl p-4 border border-red-500/20">
+                <h4 class="text-red-400 font-semibold mb-2 flex items-center">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                    </path>
+                  </svg>
+                  Strictly Prohibited
+                </h4>
+                <p class="text-sm">
+                  Uploading content depicting <strong>children and/or minors (CSAM)</strong> or any other illegal
+                  content is strictly forbidden and will be rejected.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-dark-900 px-6 py-4 flex flex-row-reverse">
+          <button type="button" id="closeInfoBtn"
+            class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm">
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Video Modal -->
   <div id="videoModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
     <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -374,7 +462,7 @@
   <!-- Footer -->
   <footer class="mt-16 py-8 border-t border-dark-800">
     <div class="container mx-auto px-4 text-center text-dark-500">
-      <p>&copy; 2024 Clip Manager. AI-powered video management for ComfyUI.</p>
+      <p>&copy; 2025 ComfyUI Clip Manager. AI-powered video management for ComfyUI.</p>
     </div>
   </footer>
 

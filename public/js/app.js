@@ -30,6 +30,13 @@ const modalBackdrop = document.getElementById('modalBackdrop');
 const closeModal = document.getElementById('closeModal');
 const statsBtn = document.getElementById('statsBtn');
 
+// Info modal elements
+const infoBtn = document.getElementById('infoBtn');
+const infoModal = document.getElementById('infoModal');
+const infoBackdrop = document.getElementById('infoBackdrop');
+const closeInfoModal = document.getElementById('closeInfoModal');
+const closeInfoBtn = document.getElementById('closeInfoBtn');
+
 // Processing modal elements
 const processingModal = document.getElementById('processingModal');
 const processingStatus = document.getElementById('processingStatus');
@@ -75,6 +82,12 @@ function setupEventListeners() {
     // Modal
     closeModal.addEventListener('click', hideModal);
     modalBackdrop.addEventListener('click', hideModal);
+
+    // Info Modal
+    infoBtn.addEventListener('click', showInfoModal);
+    closeInfoModal.addEventListener('click', hideInfoModal);
+    infoBackdrop.addEventListener('click', hideInfoModal);
+    closeInfoBtn.addEventListener('click', hideInfoModal);
 
     // Auth
     adminBtn.addEventListener('click', handleAdminClick);
@@ -862,4 +875,29 @@ function hideProcessingModal() {
     setTimeout(() => {
         processingModal.classList.add('hidden');
     }, 500);
+}
+
+// Info Modal Functions
+function showInfoModal() {
+    infoModal.classList.remove('hidden');
+    infoModal.classList.add('flex'); // Ensure flex display for centering
+    // Small delay to allow display change before transition
+    requestAnimationFrame(() => {
+        infoModal.querySelector('div[class*="transform"]').classList.remove('opacity-0', 'translate-y-4', 'sm:translate-y-0', 'sm:scale-95');
+        infoModal.querySelector('div[class*="transform"]').classList.add('opacity-100', 'translate-y-0', 'sm:scale-100');
+        infoBackdrop.classList.remove('opacity-0');
+        infoBackdrop.classList.add('opacity-100');
+    });
+}
+
+function hideInfoModal() {
+    infoModal.querySelector('div[class*="transform"]').classList.remove('opacity-100', 'translate-y-0', 'sm:scale-100');
+    infoModal.querySelector('div[class*="transform"]').classList.add('opacity-0', 'translate-y-4', 'sm:translate-y-0', 'sm:scale-95');
+    infoBackdrop.classList.remove('opacity-100');
+    infoBackdrop.classList.add('opacity-0');
+
+    setTimeout(() => {
+        infoModal.classList.add('hidden');
+        infoModal.classList.remove('flex');
+    }, 300);
 }
