@@ -15,7 +15,7 @@ services:
       - UPLOAD_DIR=/app/uploads
       - DB_PATH=/app/data/database.db
       - MAX_FILE_SIZE=100000000
-      - OLLAMA_HOST=http://192.168.1.22:11434
+      - OLLAMA_HOST=http://192.168.x.x:11434
       - OLLAMA_MODEL=llava:latest
       - FRAMES_TO_ANALYZE=5
       - ENABLE_CONTENT_MODERATION=true
