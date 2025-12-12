@@ -1,34 +1,148 @@
 require('dotenv').config();
+const ffmpeg = require('fluent-ffmpeg');
+const path = require('path');
+const fs = require('fs').promises;
 
 /**
  * Video analysis module for content moderation and tag generation
- * Supports Google Cloud Vision API (optional) with graceful fallback
+ * Supports Ollama with vision models (free, local or remote)
+ * Falls back to basic analysis if Ollama is not available
  */
 
 const ENABLE_CONTENT_MODERATION = process.env.ENABLE_CONTENT_MODERATION === 'true';
 const ENABLE_AUTO_TAGGING = process.env.ENABLE_AUTO_TAGGING === 'true';
 const MODERATION_THRESHOLD = parseFloat(process.env.MODERATION_THRESHOLD) || 0.7;
+const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llava';  // Default vision model
+const FRAMES_TO_ANALYZE = parseInt(process.env.FRAMES_TO_ANALYZE) || 3;
 
-let videoIntelligence = null;
+let ollamaAvailable = false;
 
-// Try to load Google Cloud Video Intelligence if credentials are available
-try {
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        const vision = require('@google-cloud/video-intelligence');
-        videoIntelligence = new vision.VideoIntelligenceServiceClient();
-        console.log('Google Cloud Video Intelligence initialized');
+// Check if Ollama is available
+async function checkOllamaAvailability() {
+    try {
+        const response = await fetch(`${OLLAMA_HOST}/api/tags`);
+        if (response.ok) {
+            const data = await response.json();
+            const hasVisionModel = data.models?.some(m =>
+                m.name.includes('llava') || m.name.includes('bakllava')
+            );
+
+            if (hasVisionModel) {
+                ollamaAvailable = true;
+                console.log('✅ Ollama with vision model detected - AI analysis enabled');
+            } else {
+                console.log('⚠️  Ollama found but no vision model (llava/bakllava) installed');
+                console.log('   Install with: ollama pull llava');
+            }
+        }
+    } catch (error) {
+        console.log('ℹ️  Ollama not available - using basic tag generation');
     }
-} catch (error) {
-    console.log('Google Cloud Video Intelligence not available (this is optional)');
+}
+
+// Initialize
+checkOllamaAvailability();
+
+/**
+ * Extract frames from video at specific intervals
+ */
+async function extractFrames(videoPath, numFrames = 3) {
+    const outputDir = path.join(path.dirname(videoPath), '.frames');
+    await fs.mkdir(outputDir, { recursive: true });
+
+    const framePaths = [];
+
+    return new Promise((resolve, reject) => {
+        // Get video duration first
+        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+
+            const duration = metadata.format.duration;
+            const interval = duration / (numFrames + 1);
+
+            let framesExtracted = 0;
+
+            // Extract frames at intervals
+            for (let i = 1; i <= numFrames; i++) {
+                const timestamp = interval * i;
+                const outputPath = path.join(outputDir, `frame_${i}.jpg`);
+
+                ffmpeg(videoPath)
+                    .screenshots({
+                        timestamps: [timestamp],
+                        filename: `frame_${i}.jpg`,
+                        folder: outputDir,
+                        size: '640x?'  // Resize for faster processing
+                    })
+                    .on('end', () => {
+                        framePaths.push(outputPath);
+                        framesExtracted++;
+
+                        if (framesExtracted === numFrames) {
+                            resolve(framePaths);
+                        }
+                    })
+                    .on('error', (err) => {
+                        console.error(`Error extracting frame ${i}:`, err);
+                        framesExtracted++;
+                        if (framesExtracted === numFrames) {
+                            resolve(framePaths);
+                        }
+                    });
+            }
+        });
+    });
 }
 
 /**
- * Analyze video for explicit content
- * Returns { approved: boolean, reason: string, confidence: number }
+ * Analyze a single frame using Ollama vision model
+ */
+async function analyzeFrameWithOllama(imagePath, prompt) {
+    try {
+        const imageBuffer = await fs.readFile(imagePath);
+        const base64Image = imageBuffer.toString('base64');
+
+        const response = await fetch(`${OLLAMA_HOST}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: OLLAMA_MODEL,
+                prompt: prompt,
+                images: [base64Image],
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ollama API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.response;
+    } catch (error) {
+        console.error('Error analyzing frame with Ollama:', error);
+        return null;
+    }
+}
+
+/**
+ * Analyze video for explicit content using Ollama
  */
 async function moderateContent(videoPath) {
-    if (!ENABLE_CONTENT_MODERATION || !videoIntelligence) {
-        // No moderation enabled or API not available - approve by default
+    if (!ENABLE_CONTENT_MODERATION) {
+        return {
+            approved: true,
+            reason: null,
+            confidence: 1.0
+        };
+    }
+
+    if (!ollamaAvailable) {
+        // No moderation available - approve by default (fail-open)
         return {
             approved: true,
             reason: null,
@@ -37,38 +151,41 @@ async function moderateContent(videoPath) {
     }
 
     try {
-        const fs = require('fs');
-        const videoBytes = fs.readFileSync(videoPath).toString('base64');
+        // Extract frames
+        const framePaths = await extractFrames(videoPath, 2);
 
-        const request = {
-            inputContent: videoBytes,
-            features: ['EXPLICIT_CONTENT_DETECTION'],
-        };
+        const moderationPrompt = `Analyze this image for inappropriate content. Is there any explicit, violent, or inappropriate content? Respond with only "SAFE" or "UNSAFE: [brief reason]"`;
 
-        const [operation] = await videoIntelligence.annotateVideo(request);
-        const [response] = await operation.promise();
+        let hasIssues = false;
+        let issueReason = null;
 
-        const explicitAnnotation = response.annotationResults[0].explicitAnnotation;
+        for (const framePath of framePaths) {
+            const result = await analyzeFrameWithOllama(framePath, moderationPrompt);
 
-        if (!explicitAnnotation || !explicitAnnotation.frames) {
-            return { approved: true, reason: null, confidence: 1.0 };
-        }
-
-        // Check if any frame has explicit content above threshold
-        for (const frame of explicitAnnotation.frames) {
-            const likelihood = frame.pornographyLikelihood;
-            const score = getLikelihoodScore(likelihood);
-
-            if (score >= MODERATION_THRESHOLD) {
-                return {
-                    approved: false,
-                    reason: 'Explicit content detected',
-                    confidence: score
-                };
+            if (result && result.toUpperCase().includes('UNSAFE')) {
+                hasIssues = true;
+                issueReason = result.replace(/^UNSAFE:\s*/i, '');
+                break;
             }
         }
 
-        return { approved: true, reason: null, confidence: 1.0 };
+        // Clean up frames
+        await cleanupFrames(framePaths);
+
+        if (hasIssues) {
+            return {
+                approved: false,
+                reason: issueReason || 'Potentially inappropriate content detected',
+                confidence: 0.8
+            };
+        }
+
+        return {
+            approved: true,
+            reason: null,
+            confidence: 0.9
+        };
+
     } catch (error) {
         console.error('Content moderation error:', error);
         // On error, approve by default (fail-open)
@@ -81,43 +198,48 @@ async function moderateContent(videoPath) {
 }
 
 /**
- * Generate tags from video content using AI
- * Returns array of { name: string, confidence: number, source: string }
+ * Generate tags from video content using Ollama
  */
 async function generateAITags(videoPath) {
-    if (!ENABLE_AUTO_TAGGING || !videoIntelligence) {
-        // No AI tagging available - return empty array
+    if (!ENABLE_AUTO_TAGGING) {
+        return [];
+    }
+
+    if (!ollamaAvailable) {
         return [];
     }
 
     try {
-        const fs = require('fs');
-        const videoBytes = fs.readFileSync(videoPath).toString('base64');
+        // Extract frames
+        const framePaths = await extractFrames(videoPath, FRAMES_TO_ANALYZE);
 
-        const request = {
-            inputContent: videoBytes,
-            features: ['LABEL_DETECTION'],
-        };
+        const taggingPrompt = `Describe this image in detail. List the main subjects, objects, activities, scene type, style, and mood. Be specific and concise. Format: subject1, subject2, action, scene, style, mood`;
 
-        const [operation] = await videoIntelligence.annotateVideo(request);
-        const [response] = await operation.promise();
+        const allTags = new Set();
 
-        const labels = response.annotationResults[0].segmentLabelAnnotations;
+        for (const framePath of framePaths) {
+            const description = await analyzeFrameWithOllama(framePath, taggingPrompt);
 
-        if (!labels) {
-            return [];
+            if (description) {
+                // Extract tags from description
+                const tags = extractTagsFromDescription(description);
+                tags.forEach(tag => allTags.add(tag.toLowerCase()));
+            }
         }
 
-        const tags = labels
-            .map(label => ({
-                name: label.entity.description.toLowerCase(),
-                confidence: label.segments[0]?.confidence || 0.5,
-                source: 'ai'
-            }))
-            .filter(tag => tag.confidence >= parseFloat(process.env.TAG_CONFIDENCE_THRESHOLD) || 0.5)
-            .slice(0, 15); // Limit to top 15 tags
+        // Clean up frames
+        await cleanupFrames(framePaths);
 
-        return tags;
+        // Convert to tag objects
+        const tagObjects = Array.from(allTags).map(tag => ({
+            name: tag,
+            confidence: 0.8,
+            source: 'ollama-ai'
+        }));
+
+        // Limit to top 15 tags
+        return tagObjects.slice(0, 15);
+
     } catch (error) {
         console.error('AI tagging error:', error);
         return [];
@@ -125,18 +247,60 @@ async function generateAITags(videoPath) {
 }
 
 /**
- * Convert Google's likelihood enum to a score
+ * Extract tags from LLM description
  */
-function getLikelihoodScore(likelihood) {
-    const scores = {
-        'LIKELIHOOD_UNSPECIFIED': 0,
-        'VERY_UNLIKELY': 0.1,
-        'UNLIKELY': 0.3,
-        'POSSIBLE': 0.5,
-        'LIKELY': 0.7,
-        'VERY_LIKELY': 0.9
-    };
-    return scores[likelihood] || 0;
+function extractTagsFromDescription(description) {
+    const tags = [];
+
+    // Remove common words and split by commas/spaces
+    const words = description
+        .toLowerCase()
+        .replace(/[.,!?;:]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 2);
+
+    // Common stop words to exclude
+    const stopWords = new Set([
+        'the', 'this', 'that', 'with', 'from', 'have', 'has', 'had',
+        'are', 'was', 'were', 'been', 'being', 'and', 'but', 'not',
+        'for', 'can', 'could', 'would', 'should', 'may', 'might'
+    ]);
+
+    words.forEach(word => {
+        if (!stopWords.has(word) && word.length > 2) {
+            tags.push(word);
+        }
+    });
+
+    // Remove duplicates
+    return [...new Set(tags)];
+}
+
+/**
+ * Clean up extracted frames
+ */
+async function cleanupFrames(framePaths) {
+    try {
+        for (const framePath of framePaths) {
+            try {
+                await fs.unlink(framePath);
+            } catch (err) {
+                // Ignore errors
+            }
+        }
+
+        // Try to remove the frames directory
+        if (framePaths.length > 0) {
+            const framesDir = path.dirname(framePaths[0]);
+            try {
+                await fs.rmdir(framesDir);
+            } catch (err) {
+                // Ignore errors
+            }
+        }
+    } catch (error) {
+        // Ignore cleanup errors
+    }
 }
 
 /**
@@ -157,5 +321,6 @@ async function analyzeVideo(videoPath) {
 module.exports = {
     moderateContent,
     generateAITags,
-    analyzeVideo
+    analyzeVideo,
+    checkOllamaAvailability
 };

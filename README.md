@@ -142,24 +142,55 @@ MODERATION_THRESHOLD=0.7
 TAG_CONFIDENCE_THRESHOLD=0.5
 ```
 
-## Optional: Google Cloud Vision API
+## Optional: AI Video Analysis with Ollama (Free!)
 
-For advanced content moderation and AI tagging:
+The application supports **free AI-powered video analysis** using [Ollama](https://ollama.ai) with vision models like LLaVA.
 
-1. Create a Google Cloud project
-2. Enable Video Intelligence API
-3. Create a service account and download JSON key
-4. Set environment variable:
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
-```
-5. Update `.env`:
-```env
-ENABLE_CONTENT_MODERATION=true
-ENABLE_AUTO_TAGGING=true
-```
+**Benefits:**
+- 🆓 Completely free - no API costs
+- 🔒 100% private - runs locally or on your server
+- 🚀 Fast - especially with GPU
+- 🎯 Accurate - generates relevant tags and content descriptions
 
-**Note:** The application works without Google Cloud Vision API. It will use basic tag extraction from filenames and metadata instead.
+**Quick Setup:**
+
+1. **Install Ollama:**
+   ```bash
+   # macOS/Linux
+   curl https://ollama.ai/install.sh | sh
+   
+   # Or download from: https://ollama.ai
+   ```
+
+2. **Start Ollama:**
+   ```bash
+   ollama serve
+   ```
+
+3. **Pull vision model:**
+   ```bash
+   ollama pull llava
+   ```
+
+4. **Enable in Clip Manager:**
+   
+   Update `docker-compose.yml`:
+   ```yaml
+   environment:
+     - OLLAMA_HOST=http://host.docker.internal:11434
+     - OLLAMA_MODEL=llava
+     - ENABLE_AUTO_TAGGING=true
+     - ENABLE_CONTENT_MODERATION=true
+   ```
+
+5. **Restart:**
+   ```bash
+   docker-compose down && docker-compose up -d
+   ```
+
+See [OLLAMA_SETUP.md](file:///Users/BQ72TR/git/clip-manager/OLLAMA_SETUP.md) for detailed instructions, remote setup, and troubleshooting.
+
+**Note:** The application works perfectly without AI analysis - it will use basic tag extraction from filenames and metadata.
 
 ## API Endpoints
 

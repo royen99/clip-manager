@@ -5,7 +5,7 @@ services:
     build: .
     container_name: clip-manager
     ports:
-      - "3000:3000"
+      - "3080:3000"
     volumes:
       # Persist uploads and database using named volumes
       - clip-uploads:/app/uploads
@@ -17,13 +17,10 @@ services:
       - MAX_FILE_SIZE=104857600
       - MODERATION_THRESHOLD=0.7
       - TAG_CONFIDENCE_THRESHOLD=0.5
-      # Uncomment if using Google Cloud Vision API
-      # - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-key.json
-      # - ENABLE_CONTENT_MODERATION=true
-      # - ENABLE_AUTO_TAGGING=true
-    # Uncomment if using Google Cloud credentials
-    # volumes:
-    #   - ./credentials:/app/credentials:ro
+      - OLLAMA_HOST=http://192.168.1.22:11434
+      - OLLAMA_MODEL=llava
+      - ENABLE_AUTO_TAGGING=true
+      - ENABLE_CONTENT_MODERATION=true
     restart: unless-stopped
     networks:
       - clip-network
