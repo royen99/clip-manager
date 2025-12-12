@@ -318,6 +318,22 @@ function showVideoModal(video) {
         const comfyContent = document.getElementById('comfyMetadataContent');
         let html = '';
 
+        // Add download workflow button if workflow exists
+        if (comfyMetadata?.workflow || parsedComfy.workflow) {
+            html += `
+                <div class="mb-3 flex justify-end">
+                    <a href="/api/videos/${video.id}/workflow" 
+                       download="${video.title.replace(/[^a-z0-9]/gi, '_')}_workflow.json"
+                       class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded transition-colors">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Download Workflow
+                    </a>
+                </div>
+            `;
+        }
+
         // Prompt (formatted nicely)
         if (parsedComfy.prompt && typeof parsedComfy.prompt === 'string') {
             html += `

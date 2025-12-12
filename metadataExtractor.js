@@ -237,6 +237,10 @@ async function extractComfyUIMetadata(filePath) {
                     const workflowData = JSON.parse(promptString);
 
                     console.log('Parsing ComfyUI workflow from comment.prompt, found', Object.keys(workflowData || {}).length, 'nodes');
+
+                    // Store the raw workflow for download
+                    comfyData.workflow = workflowData;
+
                     const parsedWorkflow = parseComfyUIWorkflow(workflowData);
                     console.log('Parsed workflow result:', {
                         hasPrompt: !!parsedWorkflow.prompt,

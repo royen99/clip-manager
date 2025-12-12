@@ -254,6 +254,35 @@ app.delete('/api/videos/:id', async (req, res) => {
     }
 });
 
+/**
+ * Download ComfyUI workflow JSON
+ */
+app.get('/api/videos/:id/workflow', (req, res) => {
+    try {
+        const video = getVideoWithTags(parseInt(req.params.id));
+
+        if (!video) {
+            return res.status(404).json({ error: 'Video not found' });
+        }
+
+        // Check if video has ComfyUI workflow
+        if (!video.metadata?.comfyui?.workflow) {
+            return res.status(404).json({ error: 'No ComfyUI workflow found for this video' });
+        }
+
+        // Set headers for download
+        const filename = `${video.title.replace(/[^a-z0-9]/gi, '_')}_workflow.json`;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/json');
+
+        // Send workflow JSON
+        res.json(video.metadata.comfyui.workflow);
+    } catch (error) {
+        console.error('Workflow download error:', error);
+        res.status(500).json({ error: 'Failed to download workflow' });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
