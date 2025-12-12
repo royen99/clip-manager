@@ -211,15 +211,50 @@ async function extractComfyUIMetadata(filePath) {
             }
         }
 
-        // Try to parse comment field as fallback
-        if (formatTags.comment && !comfyData.prompt) {
+        // Try to parse comment field as fallback (ComfyUI stores workflow here)
+        if (formatTags.comment) {
             try {
-                const parsedComment = JSON.parse(formatTags.comment);
-                if (parsedComment.prompt) comfyData.prompt = parsedComment.prompt;
-                if (parsedComment.model) comfyData.model = parsedComment.model;
-                if (parsedComment.seed) comfyData.seed = parsedComment.seed;
+                // Comment field often contains a JSON string with a "prompt" property
+                const commentData = typeof formatTags.comment === 'string'
+                    ? JSON.parse(formatTags.comment)
+                    : formatTags.comment;
+
+                console.log('Found comment field, keys:', Object.keys(commentData || {}));
+
+                // Check if comment has a "prompt" property with the workflow
+                if (commentData && commentData.prompt) {
+                    const workflowData = typeof commentData.prompt === 'string'
+                        ? JSON.parse(commentData.prompt)
+                        : commentData.prompt;
+
+                    console.log('Parsing ComfyUI workflow from comment.prompt, found', Object.keys(workflowData || {}).length, 'nodes');
+                    const parsedWorkflow = parseComfyUIWorkflow(workflowData);
+                    console.log('Parsed workflow result:', {
+                        hasPrompt: !!parsedWorkflow.prompt,
+                        hasModel: !!parsedWorkflow.model,
+                        lorasCount: parsedWorkflow.loras?.length || 0,
+                        steps: parsedWorkflow.steps
+                    });
+
+                    // Assign all parsed values
+                    Object.keys(parsedWorkflow).forEach(key => {
+                        if (parsedWorkflow[key] !== null && parsedWorkflow[key] !== undefined) {
+                            if (Array.isArray(parsedWorkflow[key]) && parsedWorkflow[key].length === 0) {
+                                // Skip empty arrays
+                                return;
+                            }
+                            comfyData[key] = parsedWorkflow[key];
+                        }
+                    });
+                } else if (commentData) {
+                    // Fallback: try direct parsing
+                    if (commentData.prompt) comfyData.prompt = commentData.prompt;
+                    if (commentData.model) comfyData.model = commentData.model;
+                    if (commentData.seed) comfyData.seed = commentData.seed;
+                }
             } catch (e) {
-                // Not JSON, ignore
+                console.error('Error parsing comment field:', e.message, e.stack);
+                // Not JSON or invalid format, ignore
             }
         }
 
