@@ -30,11 +30,21 @@ const modalBackdrop = document.getElementById('modalBackdrop');
 const closeModal = document.getElementById('closeModal');
 const statsBtn = document.getElementById('statsBtn');
 
+// Auth elements
+const adminBtn = document.getElementById('adminBtn');
+const loginModal = document.getElementById('loginModal');
+const loginBackdrop = document.getElementById('loginBackdrop');
+const closeLoginModal = document.getElementById('closeLoginModal');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+let isAuthenticated = false;
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     loadVideos();
     loadPopularTags();
+    checkAuthStatus();
 });
 
 // Event Listeners
@@ -60,6 +70,12 @@ function setupEventListeners() {
     // Modal
     closeModal.addEventListener('click', hideModal);
     modalBackdrop.addEventListener('click', hideModal);
+
+    // Auth
+    adminBtn.addEventListener('click', handleAdminClick);
+    closeLoginModal.addEventListener('click', hideLoginModal);
+    loginBackdrop.addEventListener('click', hideLoginModal);
+    loginForm.addEventListener('submit', handleLogin);
 
     // Stats
     statsBtn.addEventListener('click', showStats);
@@ -236,12 +252,11 @@ function createVideoCard(video, index) {
     const card = document.createElement('div');
     card.className = 'video-card bg-dark-800/50 backdrop-blur-xl rounded-xl border border-dark-700 overflow-hidden cursor-pointer';
     card.style.animationDelay = `${index * 0.05}s`;
-
     const videoUrl = `${API_BASE}/uploads/${video.filename}`;
     const uploadDate = new Date(video.upload_date).toLocaleDateString();
 
     card.innerHTML = `
-    <div class="video-thumbnail">
+    <div class="video-thumbnail relative">
       <video preload="metadata">
         <source src="${videoUrl}#t=0.5" type="video/mp4">
       </video>
@@ -250,6 +265,13 @@ function createVideoCard(video, index) {
           <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
         </svg>
       </div>
+      ${isAuthenticated ? `
+      <button class="absolute top-2 right-2 p-2 bg-red-600 hover:bg-red-700 rounded-lg shadow-lg transition-colors z-10" data-video-id="${video.id}" onclick="event.stopPropagation(); deleteVideo(${video.id})">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+      </button>
+      ` : ''}
     </div>
     <div class="p-4">
       <h3 class="font-semibold text-white mb-2 truncate">${escapeHtml(video.title)}</h3>
@@ -638,4 +660,130 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// ===== Authentication Functions =====
+
+async function checkAuthStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/status`);
+        const data = await response.json();
+        isAuthenticated = data.isAuthenticated;
+        updateAuthUI();
+    } catch (error) {
+        console.error('Error checking auth status:', error);
+        isAuthenticated = false;
+        updateAuthUI();
+    }
+}
+
+function updateAuthUI() {
+    if (isAuthenticated) {
+        adminBtn.textContent = 'Logout';
+        adminBtn.classList.remove('bg-primary-600', 'hover:bg-primary-700');
+        adminBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+    } else {
+        adminBtn.textContent = 'Admin Login';
+        adminBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+        adminBtn.classList.add('bg-primary-600', 'hover:bg-primary-700');
+    }
+}
+
+function handleAdminClick() {
+    if (isAuthenticated) {
+        // Logout
+        logout();
+    } else {
+        // Show login modal
+        showLoginModal();
+    }
+}
+
+function showLoginModal() {
+    loginModal.classList.remove('hidden');
+    loginError.classList.add('hidden');
+    loginForm.reset();
+}
+
+function hideLoginModal() {
+    loginModal.classList.add('hidden');
+    loginError.classList.add('hidden');
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+
+    loginError.classList.add('hidden');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            isAuthenticated = true;
+            updateAuthUI();
+            hideLoginModal();
+            loadVideos(); // Reload to show delete buttons
+        } else {
+            showLoginError(data.error || 'Login failed');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        showLoginError('Network error. Please try again.');
+    }
+}
+
+async function logout() {
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/logout`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            isAuthenticated = false;
+            updateAuthUI();
+            loadVideos(); // Reload to hide delete buttons
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+    }
+}
+
+function showLoginError(message) {
+    loginError.textContent = message;
+    loginError.classList.remove('hidden');
+}
+
+async function deleteVideo(videoId) {
+    if (!confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/videos/${videoId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Reload videos
+            loadVideos();
+        } else {
+            alert(data.error || 'Failed to delete video');
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert('Failed to delete video. Please try again.');
+    }
 }

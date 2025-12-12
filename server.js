@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const cors = require('cors');
+const session = require('express-session');
 require('dotenv').config();
 
 const {
@@ -22,10 +23,26 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 
+// Admin credentials from environment
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'your-secret-key-change-this';
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Session middleware
+app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: false, // set to true if using HTTPS
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
 
 // Serve static files
 app.use(express.static('public'));
@@ -229,10 +246,51 @@ app.get('/api/tags', (req, res) => {
     }
 });
 
+// Authentication middleware
+const requireAuth = (req, res, next) => {
+    if (req.session && req.session.isAdmin) {
+        return next();
+    }
+    res.status(401).json({ error: 'Unauthorized' });
+};
+
 /**
- * Delete video
+ * Admin login
  */
-app.delete('/api/videos/:id', async (req, res) => {
+app.post('/api/auth/login', (req, res) => {
+    const { username, password } = req.body;
+
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        req.session.isAdmin = true;
+        res.json({ success: true, message: 'Logged in successfully' });
+    } else {
+        res.status(401).json({ error: 'Invalid credentials' });
+    }
+});
+
+/**
+ * Admin logout  
+ */
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Logout failed' });
+        }
+        res.json({ success: true, message: 'Logged out successfully' });
+    });
+});
+
+/**
+ * Check auth status
+ */
+app.get('/api/auth/status', (req, res) => {
+    res.json({ isAuthenticated: !!(req.session && req.session.isAdmin) });
+});
+
+/**
+ * Delete video (protected - admin only)
+ */
+app.delete('/api/videos/:id', requireAuth, async (req, res) => {
     try {
         const video = getVideoWithTags(parseInt(req.params.id));
 

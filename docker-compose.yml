@@ -14,13 +14,17 @@ services:
       - PORT=3000
       - UPLOAD_DIR=/app/uploads
       - DB_PATH=/app/data/database.db
-      - MAX_FILE_SIZE=104857600
-      - MODERATION_THRESHOLD=0.7
-      - TAG_CONFIDENCE_THRESHOLD=0.5
+      - MAX_FILE_SIZE=100000000
       - OLLAMA_HOST=http://192.168.1.22:11434
-      - OLLAMA_MODEL=llava
-      - ENABLE_AUTO_TAGGING=true
+      - OLLAMA_MODEL=llava:latest
+      - FRAMES_TO_ANALYZE=5
       - ENABLE_CONTENT_MODERATION=true
+      - ENABLE_AUTO_TAGGING=true
+      - MODERATION_THRESHOLD=0.7
+      - TAG_CONFIDENCE_THRESHOLD=0.6
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=changeme
+      - SESSION_SECRET=change-this-to-a-random-secret-string
     restart: unless-stopped
     networks:
       - clip-network
