@@ -1,6 +1,6 @@
-# Clip Manager 🎬
+# ComfyUI Clip Manager 🎬
 
-A modern web application for uploading, analyzing, browsing, and searching AI-generated video clips from ComfyUI. Features automatic content moderation, AI-powered tagging, metadata extraction, and a beautiful Tailwind CSS interface.
+A modern web application for uploading, analyzing, browsing, and searching AI-generated video clips from ComfyUI. Features automatic content moderation, AI-powered tagging, metadata extraction, all with a nice interface.
 
 ## Features
 
@@ -35,6 +35,8 @@ A modern web application for uploading, analyzing, browsing, and searching AI-ge
 **Prerequisites:**
 - Docker
 - Docker Compose
+
+(or podman equivalent)
 
 **Setup:**
 
