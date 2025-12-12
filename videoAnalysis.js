@@ -65,6 +65,22 @@ async function extractFrames(videoPath, numFrames = 3) {
             const interval = duration / (numFrames + 1);
 
             let framesExtracted = 0;
+            const failedFrames = [];
+
+            // Helper function to wait for file to exist and be readable
+            const waitForFile = async (filePath, maxAttempts = 10) => {
+                for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                    try {
+                        await fs.access(filePath);
+                        // Small additional delay to ensure file is fully written
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        return true;
+                    } catch (e) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                }
+                return false;
+            };
 
             // Extract frames at intervals
             for (let i = 1; i <= numFrames; i++) {
@@ -78,19 +94,38 @@ async function extractFrames(videoPath, numFrames = 3) {
                         folder: outputDir,
                         size: '640x?'  // Resize for faster processing
                     })
-                    .on('end', () => {
-                        framePaths.push(outputPath);
+                    .on('end', async () => {
+                        // Wait for file to be fully written
+                        const fileExists = await waitForFile(outputPath);
+
+                        if (fileExists) {
+                            framePaths.push(outputPath);
+                        } else {
+                            console.error(`Frame ${i} was not written successfully`);
+                            failedFrames.push(i);
+                        }
+
                         framesExtracted++;
 
                         if (framesExtracted === numFrames) {
-                            resolve(framePaths);
+                            if (framePaths.length > 0) {
+                                resolve(framePaths);
+                            } else {
+                                reject(new Error('Failed to extract any frames'));
+                            }
                         }
                     })
                     .on('error', (err) => {
                         console.error(`Error extracting frame ${i}:`, err);
+                        failedFrames.push(i);
                         framesExtracted++;
+
                         if (framesExtracted === numFrames) {
-                            resolve(framePaths);
+                            if (framePaths.length > 0) {
+                                resolve(framePaths);
+                            } else {
+                                reject(new Error('Failed to extract any frames'));
+                            }
                         }
                     });
             }
