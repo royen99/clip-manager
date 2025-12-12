@@ -175,10 +175,23 @@ async function extractComfyUIMetadata(filePath) {
                     ? JSON.parse(formatTags.prompt)
                     : formatTags.prompt;
 
+                console.log('Parsing ComfyUI workflow, found', Object.keys(promptData || {}).length, 'nodes');
                 const parsedWorkflow = parseComfyUIWorkflow(promptData);
-                Object.assign(comfyData, parsedWorkflow);
+                console.log('Parsed workflow result:', {
+                    hasPrompt: !!parsedWorkflow.prompt,
+                    hasModel: !!parsedWorkflow.model,
+                    lorasCount: parsedWorkflow.loras?.length || 0,
+                    steps: parsedWorkflow.steps
+                });
+
+                // Assign all parsed values, overwriting the defaults
+                Object.keys(parsedWorkflow).forEach(key => {
+                    if (parsedWorkflow[key] !== null && parsedWorkflow[key] !== undefined) {
+                        comfyData[key] = parsedWorkflow[key];
+                    }
+                });
             } catch (e) {
-                console.error('Error parsing ComfyUI prompt data:', e.message);
+                console.error('Error parsing ComfyUI prompt data:', e.message, e.stack);
                 // Store as raw if can't parse
                 comfyData.prompt = formatTags.prompt;
             }
