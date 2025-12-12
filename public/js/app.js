@@ -255,8 +255,12 @@ function createVideoCard(video, index) {
     const videoUrl = `${API_BASE}/uploads/${video.filename}`;
     const uploadDate = new Date(video.upload_date).toLocaleDateString();
 
+    const contentRating = video.content_rating || 'SAFE';
+    const needsBlur = (contentRating === 'R' || contentRating === 'XXX');
+    const ratingClass = `rating-${contentRating.toLowerCase().replace('-', '')}`;
+
     card.innerHTML = `
-    <div class="video-thumbnail relative">
+    <div class="video-thumbnail relative ${needsBlur ? 'thumbnail-blurred' : ''}" ${needsBlur ? `onclick="event.stopPropagation(); this.classList.toggle('revealed')"` : ''}>
       <video preload="metadata">
         <source src="${videoUrl}#t=0.5" type="video/mp4">
       </video>
@@ -265,6 +269,16 @@ function createVideoCard(video, index) {
           <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
         </svg>
       </div>
+      ${needsBlur ? `
+      <div class="mature-warning text-white">
+        <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <p class="text-sm font-semibold">${contentRating} Content</p>
+        <p class="text-xs mt-1">Click to reveal</p>
+      </div>
+      ` : ''}
+      <span class="rating-badge ${ratingClass} absolute top-2 left-2 z-10">${contentRating}</span>
     </div>
     <div class="p-4">
       <div class="flex items-center justify-between mb-2">

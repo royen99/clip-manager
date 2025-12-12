@@ -130,69 +130,108 @@ async function analyzeFrameWithOllama(imagePath, prompt) {
 }
 
 /**
- * Analyze video for explicit content using Ollama
+ * Classify video content and assign rating
  */
-async function moderateContent(videoPath) {
-    if (!ENABLE_CONTENT_MODERATION) {
+async function classifyContent(videoPath) {
+    const enableModeration = process.env.ENABLE_CONTENT_MODERATION === 'true';
+
+    if (!enableModeration) {
         return {
-            approved: true,
-            reason: null,
-            confidence: 1.0
+            rating: 'SAFE',
+            reason: 'Content moderation disabled',
+            isLegal: true
         };
     }
 
     if (!ollamaAvailable) {
         // No moderation available - approve by default (fail-open)
         return {
-            approved: true,
-            reason: null,
-            confidence: 1.0
+            rating: 'SAFE',
+            reason: 'Ollama not available - defaulting to safe',
+            isLegal: true
         };
     }
 
     try {
         // Extract frames
-        const framePaths = await extractFrames(videoPath, 2);
+        const framePaths = await extractFrames(videoPath, 3);
 
-        const moderationPrompt = `Analyze this image for inappropriate content. Is there any explicit, violent, or inappropriate content? Respond with only "SAFE" or "UNSAFE: [brief reason]"`;
+        const ratingPrompt = `Analyze this image and classify its content maturity level. Consider:
+- Nudity (none, partial, full, explicit)
+- Violence (none, mild, graphic)
+- Sexual content (none, suggestive, explicit)
+- Adult themes
 
-        let hasIssues = false;
-        let issueReason = null;
+Respond in this exact format:
+RATING: [SAFE, PG-13, R, or XXX]
+REASON: [brief explanation]
 
+Classifications:
+- SAFE: No mature content
+- PG-13: Partial nudity, mild violence, or suggestive themes
+- R: Full nudity, graphic violence, or adult themes
+- XXX: Explicit sexual content or graphic adult material`;
+
+        let maxRating = 'SAFE';
+        let ratingReason = 'Clean content';
+        const ratingLevels = { 'SAFE': 0, 'PG-13': 1, 'R': 2, 'XXX': 3 };
+
+        // Analyze each frame
         for (const framePath of framePaths) {
-            const result = await analyzeFrameWithOllama(framePath, moderationPrompt);
+            const result = await analyzeFrameWithOllama(framePath, ratingPrompt);
 
-            if (result && result.toUpperCase().includes('UNSAFE')) {
-                hasIssues = true;
-                issueReason = result.replace(/^UNSAFE:\s*/i, '');
-                break;
+            if (result) {
+                // Parse rating from response
+                const ratingMatch = result.match(/RATING:\s*(SAFE|PG-13|R|XXX)/i);
+                const reasonMatch = result.match(/REASON:\s*(.+)/i);
+
+                if (ratingMatch) {
+                    const frameRating = ratingMatch[1].toUpperCase();
+                    const frameReason = reasonMatch ? reasonMatch[1].trim() : '';
+
+                    // Keep the highest rating found
+                    if (ratingLevels[frameRating] > ratingLevels[maxRating]) {
+                        maxRating = frameRating;
+                        ratingReason = frameReason || `Content classified as ${frameRating}`;
+                    }
+                }
+
+                // Check for illegal content keywords
+                const lowerResult = result.toLowerCase();
+                const illegalKeywords = ['child', 'minor', 'underage', 'kid', 'young child', 'prepubescent'];
+                const hasIllegalContent = illegalKeywords.some(keyword => {
+                    // Check if keyword appears in context of nudity or sexual content
+                    const keywordRegex = new RegExp(`(${keyword}).*?(nude|naked|sexual|explicit)|(nude|naked|sexual|explicit).*?(${keyword})`, 'i');
+                    return keywordRegex.test(result);
+                });
+
+                if (hasIllegalContent) {
+                    await cleanupFrames(framePaths);
+                    return {
+                        rating: 'REJECTED',
+                        reason: 'Potentially illegal content detected',
+                        isLegal: false
+                    };
+                }
             }
         }
 
         // Clean up frames
         await cleanupFrames(framePaths);
 
-        if (hasIssues) {
-            return {
-                approved: false,
-                reason: issueReason || 'Potentially inappropriate content detected',
-                confidence: 0.8
-            };
-        }
-
         return {
-            approved: true,
-            reason: null,
-            confidence: 0.9
+            rating: maxRating,
+            reason: ratingReason,
+            isLegal: true
         };
 
     } catch (error) {
-        console.error('Content moderation error:', error);
-        // On error, approve by default (fail-open)
+        console.error('Content classification error:', error);
+        // On error, default to SAFE (fail-safe)
         return {
-            approved: true,
-            reason: null,
-            confidence: 0
+            rating: 'SAFE',
+            reason: 'Classification error - defaulting to safe',
+            isLegal: true
         };
     }
 }
@@ -304,22 +343,22 @@ async function cleanupFrames(framePaths) {
 }
 
 /**
- * Analyze video completely - moderation + tagging
+ * Analyze video completely - classification + tagging
  */
 async function analyzeVideo(videoPath) {
-    const [moderation, aiTags] = await Promise.all([
-        moderateContent(videoPath),
+    const [contentClassification, aiTags] = await Promise.all([
+        classifyContent(videoPath),
         generateAITags(videoPath)
     ]);
 
     return {
-        moderation,
+        contentClassification,
         aiTags
     };
 }
 
 module.exports = {
-    moderateContent,
+    classifyContent,
     generateAITags,
     analyzeVideo,
     checkOllamaAvailability

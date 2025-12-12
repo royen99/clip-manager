@@ -108,27 +108,28 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
         // Generate basic tags from filename and metadata
         const basicTags = generateBasicTags(req.file.originalname, metadata);
 
-        // Analyze video (content moderation + AI tagging)
+        // Analyze video (content classification + AI tagging)
         const analysis = await analyzeVideo(videoPath);
 
-        // Check if video is approved
-        if (!analysis.moderation.approved) {
+        // Check if video contains illegal content
+        if (!analysis.contentClassification.isLegal) {
             await fs.unlink(videoPath); // Delete rejected video
             return res.status(400).json({
                 error: 'Video rejected',
-                reason: analysis.moderation.reason,
-                confidence: analysis.moderation.confidence
+                reason: analysis.contentClassification.reason
             });
         }
 
-        // Create video record in database
+        // Create video record in database with content rating
         const videoId = createVideo({
             filename: req.file.filename,
             originalName: req.file.originalname,
             title: title || req.file.originalname,
             fileSize: req.file.size,
             duration: metadata.basic.duration,
-            metadata: metadata
+            metadata: metadata,
+            contentRating: analysis.contentClassification.rating,
+            ratingReason: analysis.contentClassification.reason
         });
 
         // Combine all tags (basic + AI)
@@ -142,7 +143,7 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
         // Fetch complete video data to return
         const videoData = getVideoWithTags(videoId);
 
-        console.log(`Video uploaded successfully: ID ${videoId}`);
+        console.log(`Video uploaded successfully: ID ${videoId}, Rating: ${analysis.contentClassification.rating}`);
 
         res.json({
             success: true,

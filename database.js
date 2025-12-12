@@ -23,7 +23,9 @@ db.exec(`
     metadata TEXT,
     status TEXT DEFAULT 'approved',
     rejection_reason TEXT,
-    views INTEGER DEFAULT 0
+    views INTEGER DEFAULT 0,
+    content_rating TEXT DEFAULT 'SAFE',
+    rating_reason TEXT
   )
 `);
 
@@ -44,15 +46,29 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
 `);
 
+// Add content rating columns if they don't exist (migration)
+try {
+  db.exec('ALTER TABLE videos ADD COLUMN content_rating TEXT DEFAULT "SAFE"');
+  console.log('Added content_rating column');
+} catch (e) {
+  // Column already exists
+}
+
+try {
+  db.exec('ALTER TABLE videos ADD COLUMN rating_reason TEXT');
+  console.log('Added rating_reason column');
+} catch (e) {
+  // Column already exists
+}
+
 console.log('Database initialized successfully');
 
 
-// Video operations
 const videoOperations = {
   // Insert a new video
   insertVideo: db.prepare(`
-    INSERT INTO videos (filename, original_name, title, file_size, duration, metadata)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO videos (filename, original_name, title, file_size, duration, metadata, content_rating, rating_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   // Get all approved videos
@@ -114,7 +130,7 @@ const tagOperations = {
 
 // Helper functions
 function createVideo(videoData) {
-  const { filename, originalName, title, fileSize, duration, metadata } = videoData;
+  const { filename, originalName, title, fileSize, duration, metadata, contentRating, ratingReason } = videoData;
   const metadataJson = metadata ? JSON.stringify(metadata) : null;
 
   const result = videoOperations.insertVideo.run(
@@ -123,7 +139,9 @@ function createVideo(videoData) {
     title || originalName,
     fileSize,
     duration,
-    metadataJson
+    metadataJson,
+    contentRating || 'SAFE',
+    ratingReason || null
   );
 
   return result.lastInsertRowid;
