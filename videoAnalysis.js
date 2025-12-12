@@ -210,15 +210,7 @@ Classifications:
                 }
 
                 // Check for illegal content keywords
-                const lowerResult = result.toLowerCase();
-                const illegalKeywords = ['child', 'minor', 'childhood', 'children', 'underage', 'kid', 'young child', 'prepubescent'];
-                const hasIllegalContent = illegalKeywords.some(keyword => {
-                    // Check if keyword appears in context of nudity or sexual content
-                    const keywordRegex = new RegExp(`(${keyword}).*?(nude|vagina|penis|naked|sex|sexual|explicit)|(nude|vagina|penis|naked|sex|sexual|explicit).*?(${keyword})`, 'i');
-                    return keywordRegex.test(result);
-                });
-
-                if (hasIllegalContent) {
+                if (checkForIllegalContent(result)) {
                     await cleanupFrames(framePaths);
                     return {
                         rating: 'REJECTED',
@@ -369,15 +361,64 @@ async function cleanupFrames(framePaths) {
  * Analyze video completely - classification + tagging
  */
 async function analyzeVideo(videoPath) {
-    const [contentClassification, aiTags] = await Promise.all([
+    let [contentClassification, aiTags] = await Promise.all([
         classifyContent(videoPath),
         generateAITags(videoPath)
     ]);
+
+    // Cross-reference tags for illegal content
+    // If tags contain both child-related terms AND explicit terms, reject the video
+    // This catches cases where the classification prompt might have missed it but the tagging prompt caught it
+    const tagNames = aiTags.map(t => t.name);
+    if (contentClassification.isLegal && checkForIllegalContentInTags(tagNames)) {
+        console.log('⚠️ Illegal content detected via tags override');
+        contentClassification = {
+            rating: 'REJECTED',
+            reason: 'Potentially illegal content detected in AI tags',
+            isLegal: false
+        };
+    }
 
     return {
         contentClassification,
         aiTags
     };
+}
+
+/**
+ * Check text for illegal content patterns (child + sexual content)
+ */
+function checkForIllegalContent(text) {
+    if (!text) return false;
+
+    const illegalKeywords = ['child', 'minor', 'childhood', 'children', 'underage', 'kid', 'young child', 'prepubescent'];
+
+    return illegalKeywords.some(keyword => {
+        // Check if keyword appears in context of nudity or sexual content
+        // Using [\s\S] instead of . to match across newlines
+        const keywordRegex = new RegExp(`(${keyword})[\\s\\S]*?(nude|vagina|penis|naked|sex|sexual|explicit)|(nude|vagina|penis|naked|sex|sexual|explicit)[\\s\\S]*?(${keyword})`, 'i');
+        return keywordRegex.test(text);
+    });
+}
+
+/**
+ * Check if a list of tags contains illegal content combinations
+ */
+function checkForIllegalContentInTags(tags) {
+    if (!tags || tags.length === 0) return false;
+
+    const illegalKeywords = ['child', 'minor', 'childhood', 'children', 'underage', 'kid', 'young child', 'prepubescent'];
+    const sexualKeywords = ['nude', 'vagina', 'penis', 'naked', 'sex', 'sexual', 'explicit', 'erotic'];
+
+    const hasIllegalSubject = tags.some(tag =>
+        illegalKeywords.some(keyword => tag.toLowerCase().includes(keyword))
+    );
+
+    const hasSexualContent = tags.some(tag =>
+        sexualKeywords.some(keyword => tag.toLowerCase().includes(keyword))
+    );
+
+    return hasIllegalSubject && hasSexualContent;
 }
 
 module.exports = {
