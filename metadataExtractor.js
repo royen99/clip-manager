@@ -223,9 +223,18 @@ async function extractComfyUIMetadata(filePath) {
 
                 // Check if comment has a "prompt" property with the workflow
                 if (commentData && commentData.prompt) {
-                    const workflowData = typeof commentData.prompt === 'string'
-                        ? JSON.parse(commentData.prompt)
-                        : commentData.prompt;
+                    // Sanitize the JSON string to replace NaN with null (ComfyUI sometimes has NaN values)
+                    let promptString = typeof commentData.prompt === 'string'
+                        ? commentData.prompt
+                        : JSON.stringify(commentData.prompt);
+
+                    // Replace invalid JSON values
+                    promptString = promptString
+                        .replace(/:\s*NaN/g, ': null')
+                        .replace(/:\s*Infinity/g, ': null')
+                        .replace(/:\s*-Infinity/g, ': null');
+
+                    const workflowData = JSON.parse(promptString);
 
                     console.log('Parsing ComfyUI workflow from comment.prompt, found', Object.keys(workflowData || {}).length, 'nodes');
                     const parsedWorkflow = parseComfyUIWorkflow(workflowData);
