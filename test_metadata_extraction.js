@@ -23,6 +23,32 @@ const testCases = [
         expectedModel: "wan22RemixT2VI2V_i2vHighV20-Q4_K_M.gguf"
     },
     {
+        name: "User Reported Case (UNETLoader)",
+        workflow: {
+            "37": {
+                "inputs": {
+                    "unet_name": "Wan2.2\\Wan2.2-i2v-14B-fp8-scaled\\wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+                    "weight_dtype": "default"
+                },
+                "class_type": "UNETLoader",
+                "_meta": {
+                    "title": "UNet加载器"
+                }
+            },
+            "56": {
+                "inputs": {
+                    "unet_name": "Wan2.2\\Wan2.2-i2v-14B-fp8-scaled\\wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+                    "weight_dtype": "default"
+                },
+                "class_type": "UNETLoader",
+                "_meta": {
+                    "title": "UNet加载器"
+                }
+            }
+        },
+        expectedModel: "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+    },
+    {
         name: "Lora Loader (LoraManager) Case",
         workflow: {
             "130": {

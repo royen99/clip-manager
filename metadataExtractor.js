@@ -91,7 +91,7 @@ function parseComfyUIWorkflow(workflowData) {
         }
 
         // Support for GGUF Model Loader
-        if (classType === 'UnetLoaderGGUF' && inputs.unet_name) {
+        if ((classType === 'UnetLoaderGGUF' || classType === 'UNETLoader') && inputs.unet_name) {
             // If we already have a model, append this one or prefer it? 
             // Often GGUF loaders come in pairs (high/low), let's keep the one we found or join them?
             // User requested seeing them. Let's overwrite "WanVideoModelLoader" if this seems more specific, 
