@@ -90,12 +90,58 @@ function parseComfyUIWorkflow(workflowData) {
             }
         }
 
+        // Support for GGUF Model Loader
+        if (classType === 'UnetLoaderGGUF' && inputs.unet_name) {
+            // If we already have a model, append this one or prefer it? 
+            // Often GGUF loaders come in pairs (high/low), let's keep the one we found or join them?
+            // User requested seeing them. Let's overwrite "WanVideoModelLoader" if this seems more specific, 
+            // or just use the extracted name.
+            if (!parsed.model) {
+                parsed.model = inputs.unet_name;
+            } else if (!parsed.model.includes(inputs.unet_name)) {
+                // Append if different (e.g. High + Low)
+                parsed.model = `${parsed.model} + ${inputs.unet_name}`;
+            }
+        }
+
+        // Support for Standard Checkpoint Loader
+        if (classType === 'CheckpointLoaderSimple' && inputs.ckpt_name) {
+            if (!parsed.model) {
+                parsed.model = inputs.ckpt_name;
+            }
+        }
+
         // Extract LoRA information
+        // WanVideo specific
         if ((classType === 'WanVideoLoraSelect' || classType === 'WanVideoLoraSelectMulti') && inputs.lora) {
             if (inputs.lora !== 'none') {
                 parsed.loras.push({
                     name: inputs.lora,
                     strength: inputs.strength || inputs.strength_0 || 1.0
+                });
+            }
+        }
+
+        // Standard LoraLoader & LoraLoaderModelOnly
+        if ((classType === 'LoraLoader' || classType === 'LoraLoaderModelOnly') && inputs.lora_name) {
+            parsed.loras.push({
+                name: inputs.lora_name,
+                strength: inputs.strength_model || inputs.strength_clip || 1.0
+            });
+        }
+
+        // Lora Loader (LoraManager) - Complex definition
+        if (classType === 'Lora Loader (LoraManager)' && inputs.loras) {
+            // "loras" can be a complex object or array based on the provided debug.json example
+            // In the example: "loras": [ { "name": "...", "strength": 1, ... }, ... ]
+            if (Array.isArray(inputs.loras)) {
+                inputs.loras.forEach(l => {
+                    if (l.active !== false && l.name) {
+                        parsed.loras.push({
+                            name: l.name,
+                            strength: l.strength || 1.0
+                        });
+                    }
                 });
             }
         }
@@ -386,5 +432,6 @@ function generateBasicTags(filename, metadata) {
 module.exports = {
     extractVideoMetadata,
     extractComfyUIMetadata,
-    generateBasicTags
+    generateBasicTags,
+    parseComfyUIWorkflow
 };
