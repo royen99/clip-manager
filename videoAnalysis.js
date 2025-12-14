@@ -145,7 +145,7 @@ async function analyzeFrameWithOllama(imagePath, prompt) {
 /**
  * Classify video content and assign rating
  */
-async function classifyContent(videoPath) {
+async function classifyContent(videoPath, framePaths) {
     const enableModeration = process.env.ENABLE_CONTENT_MODERATION === 'true';
 
     if (!enableModeration) {
@@ -167,7 +167,8 @@ async function classifyContent(videoPath) {
 
     try {
         // Extract frames
-        const framePaths = await extractFrames(videoPath, 3);
+        // const framePaths = await extractFrames(videoPath, 3); // Removed: received as argument
+
 
         const ratingPrompt = `Analyze this image and classify its content maturity level. Consider:
 - Nudity (none, partial, full, explicit)
@@ -211,7 +212,7 @@ Classifications:
 
                 // Check for illegal content keywords
                 if (checkForIllegalContent(result)) {
-                    await cleanupFrames(framePaths);
+                    // await cleanupFrames(framePaths); // Removed; cleanup handled by caller
                     return {
                         rating: 'REJECTED',
                         reason: 'Potentially illegal content detected',
@@ -222,7 +223,7 @@ Classifications:
         }
 
         // Clean up frames
-        await cleanupFrames(framePaths);
+        // await cleanupFrames(framePaths); // Removed; cleanup handled by caller
 
         return {
             rating: maxRating,
@@ -244,7 +245,7 @@ Classifications:
 /**
  * Generate tags from video content using Ollama
  */
-async function generateAITags(videoPath) {
+async function generateAITags(videoPath, framePaths) {
     if (!ENABLE_AUTO_TAGGING) {
         return [];
     }
@@ -255,7 +256,8 @@ async function generateAITags(videoPath) {
 
     try {
         // Extract frames
-        const framePaths = await extractFrames(videoPath, FRAMES_TO_ANALYZE);
+        // const framePaths = await extractFrames(videoPath, FRAMES_TO_ANALYZE); // Removed: received as argument
+
 
         const taggingPrompt = `Analyze this image and list COMPREHENSIVE tags for what is ACTUALLY VISIBLE. 
 
@@ -282,7 +284,8 @@ Output purely a comma-separated list of relevant tags. Do not categorize or expl
         }
 
         // Clean up frames
-        await cleanupFrames(framePaths);
+        // await cleanupFrames(framePaths); // Removed: cleanup handled by caller
+
 
         // Convert to tag objects
         const tagObjects = Array.from(allTags).map(tag => ({
@@ -361,10 +364,24 @@ async function cleanupFrames(framePaths) {
  * Analyze video completely - classification + tagging
  */
 async function analyzeVideo(videoPath) {
+    // Extract frames once for both processes to share and avoid race conditions
+    let framePaths = [];
+    try {
+        framePaths = await extractFrames(videoPath, Math.max(3, FRAMES_TO_ANALYZE));
+    } catch (error) {
+        console.error('Failed to extract frames:', error);
+        // Continue with empty frames, sub-functions will handle it gracefully or skip
+    }
+
     let [contentClassification, aiTags] = await Promise.all([
-        classifyContent(videoPath),
-        generateAITags(videoPath)
+        classifyContent(videoPath, framePaths),
+        generateAITags(videoPath, framePaths)
     ]);
+
+    // Cleanup frames after both are done
+    if (framePaths.length > 0) {
+        await cleanupFrames(framePaths);
+    }
 
     // Cross-reference tags for illegal content
     // If tags contain both child-related terms AND explicit terms, reject the video

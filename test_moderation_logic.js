@@ -19,6 +19,8 @@ function checkForIllegalContentInTags(tags) {
         illegalKeywords.some(keyword => tag.toLowerCase().includes(keyword))
     );
 
+
+
     const hasSexualContent = tags.some(tag =>
         sexualKeywords.some(keyword => tag.toLowerCase().includes(keyword))
     );
