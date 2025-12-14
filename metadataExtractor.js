@@ -60,6 +60,33 @@ function parseComfyUIWorkflow(workflowData) {
         return parsed;
     }
 
+    // Helper to resolve inputs that might be links to other nodes
+    const resolveInput = (input) => {
+        if (Array.isArray(input) && input.length === 2) {
+            const [nodeId, slotIndex] = input;
+            const sourceNode = workflowData[nodeId];
+            if (!sourceNode) return null;
+
+            // Handle Primitive nodes
+            if (sourceNode.class_type === 'PrimitiveStringMultiline' ||
+                sourceNode.class_type === 'PrimitiveString' ||
+                sourceNode.class_type === 'PrimitiveNode') {
+
+                if (sourceNode.inputs && sourceNode.inputs.value) {
+                    return sourceNode.inputs.value;
+                }
+                if (sourceNode.inputs && sourceNode.inputs.string) {
+                    return sourceNode.inputs.string;
+                }
+                if (sourceNode.inputs && sourceNode.inputs.text) {
+                    return sourceNode.inputs.text;
+                }
+            }
+            return null;
+        }
+        return input;
+    };
+
     // Iterate through all nodes to extract information
     Object.values(workflowData).forEach(node => {
         if (!node || !node.inputs) return;
@@ -69,8 +96,14 @@ function parseComfyUIWorkflow(workflowData) {
 
         // Extract positive prompts (CLIPTextEncode, ImpactWildcardProcessor)
         if (classType === 'CLIPTextEncode' && inputs.text && !parsed.prompt) {
+            let text = inputs.text;
+
+            // Resolve link if needed
+            if (Array.isArray(text)) {
+                text = resolveInput(text);
+            }
+
             // Check if it's not the negative prompt (usually longer or first one found)
-            const text = inputs.text;
             if (typeof text === 'string' && text.length > 10 && !text.includes('低质量') && !text.includes('worst quality')) {
                 parsed.prompt = text;
             } else if (typeof text === 'string' && text.includes('低质量')) {
