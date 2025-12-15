@@ -2,6 +2,8 @@
 
 A modern web application for uploading, analyzing, browsing, and searching AI-generated video clips from ComfyUI. Features automatic content moderation, AI-powered tagging, metadata extraction, all with a nice interface.
 
+Demo/Test instance: https://comfyui.ircqnet.com
+
 ## Features
 
 ✨ **Video Upload**
